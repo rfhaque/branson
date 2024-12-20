@@ -33,7 +33,7 @@
 template <typename Census_T>
 Census_T replicated_transport(
     const Mesh &mesh, const GPU_Setup &gpu_setup, IMC_State &imc_state,
-    std::vector<double> &rank_abs_E, std::vector<double> &rank_track_E, 
+    std::vector<double> &rank_abs_E, std::vector<double> &rank_track_E,
     Census_T  &all_photons, const int n_omp_threads, const uint32_t batch_size,
     const int transport_algorithm) {
   using std::cout;
@@ -41,7 +41,7 @@ Census_T replicated_transport(
   using std::vector;
 
   // is the GPU even available?
-  #ifdef USE_CUDA
+  #ifdef HAS_GPU
   constexpr bool gpu_available = true;
   #else
   constexpr bool gpu_available = false;
@@ -76,28 +76,29 @@ Census_T replicated_transport(
     if constexpr(std::is_same_v<Census_T, std::vector<Photon>>) {
       t_transport.start_timer("gpu transport");
       gpu_transport_photons(rank_cell_offset, all_photons, gpu_setup.get_device_cells_ptr(), cell_tallies);
+      auto batch_complete = post_process_photons(next_dt, all_photons, census_list, census_E, exit_E);
       t_transport.stop_timer("gpu transport");
       std::cout<<"gpu transport time: "<<t_transport.get_time("gpu transport")<<std::endl;
     }
     else {
-      std::cout<<"No GPU kernel for SOA particle data structures yet"<<std::endl; 
+      std::cout<<"No GPU kernel for SOA particle data structures yet"<<std::endl;
       exit(EXIT_FAILURE);
     }
   } // CPU mode
   else {
-    if (transport_algorithm == Constants::HISTORY) { 
-      std::cout<<"about to start history based"<<std::endl;
+    if (transport_algorithm == Constants::HISTORY) {
+      //std::cout<<"about to start history based"<<std::endl;
       history_cpu_transport_photons(rank_cell_offset, all_photons, mesh.get_cells(), cell_tallies, n_omp_threads);
       auto batch_complete = post_process_photons(next_dt, all_photons, census_list, census_E, exit_E);
     }
     else if(transport_algorithm ==Constants::EVENT) {
-      if constexpr(std::is_same_v<Census_T, std::vector<Photon>>) { 
+      if constexpr(std::is_same_v<Census_T, std::vector<Photon>>) {
         std::vector<EmissionGroupData> emission_groups(mesh.get_n_local_cells());
         for (size_t i = 0; i < mesh.get_n_local_cells(); ++i) {
           emission_groups[i] = precompute_emission_group_data(mesh.get_cells()[i]);
         }
         // ARL: try batching this?
-        std::cout<<"about to start aos event-based batch size of "<<batch_size<<" particles"<<std::endl;
+        //std::cout<<"about to start aos event-based batch size of "<<batch_size<<" particles"<<std::endl;
         for (size_t batch_start = 0; batch_start < all_photons.size(); batch_start += batch_size) {
           size_t batch_end = std::min(batch_start + batch_size, all_photons.size());
 
@@ -114,7 +115,7 @@ Census_T replicated_transport(
           emission_groups[i] = precompute_emission_group_data(mesh.get_cells()[i]);
         }
 
-        std::cout<<"about to start soa event-based, batch size of "<<batch_size<<" particles"<<std::endl;
+        //std::cout<<"about to start soa event-based, batch size of "<<batch_size<<" particles"<<std::endl;
         for (size_t batch_start = 0; batch_start < all_photons.size(); batch_start += batch_size) {
           size_t batch_end = std::min(batch_start + batch_size, all_photons.size());
 

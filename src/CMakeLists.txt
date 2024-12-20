@@ -11,24 +11,51 @@
 
 cmake_minimum_required (VERSION 3.11)
 
+option(USE_GPU "user-set flag to compile in GPU code" FALSE)
 
 if(DEFINED ENV{CUDADIR}
    OR DEFINED ENV{CUDACXX}
    OR DEFINED ENV{CUDA_HOME})
-  message("CUDA module found (CUDA environment variables set) making GPU BRANSON")
-  add_compile_definitions(USE_GPU)
-  set(CUDA_DBS_STRING "CUDA")
-  enable_language(CUDA)
-else()
-  message("CUDA module not found making CPU only BRANSON")
-  set(CUDA_DBS_STRING "")
+  if(USE_GPU)
+    set(GPU_DBS_STRING "CUDA" CACHE STRING "If CUDA is available, this variable is 'CUDA'")
+    enable_language(CUDA)
+    set(USE_CUDA TRUE)
+  endif()
+elseif(
+  "$ENV{LOADEDMODULES}" MATCHES "rocmcc"
+  OR DEFINED ENV{HIPCXX}
+  OR DEFINED CMAKE_HIP_COMPILER)
+  if(USE_GPU)
+    set(GPU_DBS_STRING "HIP" CACHE STRING "If HIP is available, this variable is 'HIP'")
+    #if(CMAKE_HIP_COMPILER MATCHES "CC")
+    #  set(CMAKE_HIP_FLAGS "-x hip")
+    #endif()
+    enable_language(HIP)
+    set(USE_HIP TRUE)
+  endif()
 endif()
 
+message("GPU_DBS_STRING: ${GPU_DBS_STRING}")
 project (BRANSON
   VERSION 0.8
   DESCRIPTION "Branson can be used to study different algorithms for parallel Monte Carlo transport. Currently it contains particle passing and mesh passing methods for domain decomposition."
 #  HOMEPAGE URL "https://github.com/lanl/branson" # needs cmake 3.12+
-  LANGUAGES CXX C ${CUDA_DBS_STRING})
+  LANGUAGES CXX C ${GPU_DBS_STRING})
+
+get_property(_LANGUAGES_ GLOBAL PROPERTY ENABLED_LANGUAGES)
+
+message("Languages: ${_LANGUAGES_}")
+if((_LANGUAGES_ MATCHES CUDA OR _LANGUAGES_ MATCHES HIP) AND USE_GPU)
+  message("CUDA/HIP module found (CUDA/HIP environment variables set) and USE_GPU is on, making GPU BRANSON")
+  add_compile_definitions(HAS_GPU)
+elseif(USE_GPU)
+  message(FATAL_ERROR "CUDA/HIP module NOT found (CUDA/HIP environment variables set) but USE_GPU is on, reconfigure with USE_GPU off or fix modules")
+elseif(NOT USE_GPU)
+  message("GPU mode not requested, making CPU only BRANSON")
+else()
+  message("CUDA/HIP module not found and GPU mode not requested, making CPU only BRANSON")
+endif()
+
 
 # Build system support files are located here.
 set( CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/config )
@@ -88,6 +115,7 @@ endif ()
 
 # add compiler flags
 if( CMAKE_CXX_COMPILER_ID STREQUAL "GNU" )
+  set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=native -ffp-contract=off")
   set( CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -Wall -O0")
   #set( CMAKE_CXX_FLAGS_RELEASE "-march=native  -O3 -funroll-loops -fno-var-tracking-assignments")
   set( CMAKE_CXX_FLAGS_RELEASE "-g -O3 -funroll-loops -fno-var-tracking-assignments")
@@ -187,14 +215,17 @@ endif()
 configure_file(config.h.in ${PROJECT_BINARY_DIR}/config.h)
 #------------------------------------------------------------------------------#
 
-if("${CUDA_DBS_STRING}" STREQUAL "CUDA" )
+if("${GPU_DBS_STRING}" STREQUAL "CUDA" )
   message("Setting CUDA compiler options")
-  set_target_properties(BRANSON PROPERTIES CUDA_ARCHITECTURES "70") # V100
-  #set_target_properties(BRANSON PROPERTIES CUDA_ARCHITECTURES "80") # A100
+  #set_target_properties(BRANSON PROPERTIES CUDA_ARCHITECTURES "70") # V100
+  set_target_properties(BRANSON PROPERTIES CUDA_ARCHITECTURES "80") # A100
   set_target_properties(BRANSON PROPERTIES CUDA_STANDARD 17)
   string(APPEND CMAKE_CUDA_FLAGS " -g --expt-relaxed-constexpr")
   string(APPEND CMAKE_CUDA_FLAGS " --expt-extended-lambda"  )
+  add_compile_definitions(USE_CUDA)
   set_source_files_properties("main.cc" PROPERTIES LANGUAGE CUDA)
+elseif()
+  # what do we do for HIP?
 endif()
 
 target_link_libraries( BRANSON PRIVATE ${branson_deps} )

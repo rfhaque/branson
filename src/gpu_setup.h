@@ -23,7 +23,7 @@ public:
   GPU_Setup(const int rank, const int n_ranks, const bool use_gpu_transporter, const std::vector<Cell> &cpu_cells)
     : m_use_gpu_transporter(use_gpu_transporter), device_cells_ptr(nullptr)
   {
-#ifdef USE_CUDA
+#ifdef HAS_GPU
     if(m_use_gpu_transporter) {
       // MPI rank to GPU mapping
       set_device_ID(rank, n_ranks);
@@ -43,7 +43,7 @@ public:
 
   //! Destructor
   ~GPU_Setup() {
-#ifdef USE_CUDA
+#ifdef HAS_GPU
     if(m_use_gpu_transporter) {
       cudaFree(device_cells_ptr);
     }
