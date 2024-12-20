@@ -379,7 +379,7 @@ macro(setupTPLs)
     elseif("${MPI_FLAVOR}" MATCHES "spectrum")
       setupspectrummpi()
     elseif("${MPI_FLAVOR}" MATCHES "cray")
-      setupcraympi()
+      setupCrayMPI()
     else()
       message(
         FATAL_ERROR
@@ -581,6 +581,56 @@ The Draco build system doesn't know how to configure the build for
   endif ()
 
 endmacro()
+
+# ------------------------------------------------------------------------------------------------ #
+# Setup Cray MPI and wrappers
+# ------------------------------------------------------------------------------------------------ #
+macro(setupCrayMPI)
+
+  query_topology()
+
+  # salloc/sbatch options:
+  #
+  # * -N      limit job to a single node.
+  # * --gres=craynetwork:0 This option allows more than one srun to be running at the same time on
+  #   the Cray. There are 4 gres “tokens” available. If unspecified, each srun invocation will
+  #   consume all of them. Setting the value to 0 means consume none and allow the user to run as
+  #   many concurrent jobs as there are cores available on the node. This should only be specified
+  #   on the salloc/sbatch command.  Gabe doesn't recommend this option for regression testing.
+  # * --vm-overcommit=disable|enable Do not allow overcommit of heap resources.
+  # * -p knl    Limit allocation to KNL nodes.
+  #
+  # srun options:
+  #
+  # * --cpu_bind=verbose,cores Bind MPI ranks to cores and print a summary of binding when run
+  # * --exclusive This option will keep concurrent jobs from running on the same cores. If you want
+  #   to background tasks to have them run simultaneously, this option is required to be set or they
+  #   will stomp on the same cores.
+  # * --overlap Allow steps to overlap each other on the CPUs. By default steps do not share CPUs
+  #   with other parallel steps.
+  # * --hint=nomultithread Disable use of hyperthreads (use only physical cores)
+
+  set(preflags " ") # -N 1 --cpu_bind=verbose,cores
+  if(NOT MPIEXEC_EXECUTABLE MATCHES "flux")
+    if(DEFINED ENV{PE_PRODUCT_LIST} AND "$ENV{PE_PRODUCT_LIST}" MATCHES "CRAYPE_X86_SPR")
+      # ATS-3
+      string(APPEND preflags " --overlap --cpu-bind=none --hint=nomultithread")
+    else()
+      string(APPEND preflags " --gres=craynetwork:0 --overlap")
+    endif()
+  endif()
+  set(MPIEXEC_PREFLAGS
+      ${preflags}
+      CACHE STRING "extra mpirun flags (list)." FORCE)
+  # consider adding '-m=cyclic'
+  set(MPIEXEC_PREFLAGS_PERFBENCH
+      ${preflags}
+      CACHE STRING "extra mpirun flags (list)." FORCE)
+  set(MPIEXEC_OMP_PREFLAGS
+      "${MPIEXEC_PREFLAGS} -c ${MPI_CORES_PER_CPU}"
+      CACHE STRING "extra mpirun flags (list)." FORCE)
+endmacro()
+
 
 #------------------------------------------------------------------------------#
 # End find_tpls.cmake
