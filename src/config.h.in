@@ -39,8 +39,17 @@
 #include <caliper/cali.h>
 #endif
 
+// since the main.cc as marked as a CUDA file in CUDA mode, this allows the tests to compile
+// without marking them as cuda files (CMake doesn't point to include paths for cuda if it's a
+// C++ main)
+#ifdef __NVCC__
+#define USE_CUDA ON
+#endif
 
-#ifdef HAS_GPU
+#ifdef __HIPCC__
+#define USE_HIP ON
+#endif
+
 /*------------------------------------------------------------------------------------------------*/
 /* HIP Support */
 #ifdef USE_HIP
@@ -77,10 +86,11 @@
 #include <thrust/device_vector.h>
 #include <thrust/execution_policy.h>
 #include <thrust/sort.h>
-#endif //USE_CUDA
+#endif // USE_CUDA
 
 /*----------------------------------------------------------------------------*/
 /* Mark functions for compilation on host and device */
+#if defined(USE_HIP) or defined(USE_CUDA)
 #define HOST_AND_DEVICE_FUNCTION __host__ __device__
 #define GPU_HOST_DEVICE __host__ __device__
 #define GPU_DEVICE __device__
@@ -93,7 +103,6 @@ GPU_HOST_DEVICE inline void accumulate(T &target, T const addend) {
   atomicAdd(&target, addend);
   return;
 }
-
 #else
 
 #define HOST_AND_DEVICE_FUNCTION
@@ -107,7 +116,7 @@ template <class T> inline void accumulate(T &target, T const addend) {
   target += addend;
   return;
 }
-#endif // HAS_GPU
+#endif // USE_HIP or USE_CUDA
 
 inline void Insist(const bool pass, const std::string &message) {
   if (!pass) {

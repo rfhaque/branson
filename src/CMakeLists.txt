@@ -19,7 +19,6 @@ if(DEFINED ENV{CUDADIR}
   if(USE_GPU)
     set(GPU_DBS_STRING "CUDA" CACHE STRING "If CUDA is available, this variable is 'CUDA'")
     enable_language(CUDA)
-    set(USE_CUDA TRUE)
   endif()
 elseif(
   "$ENV{LOADEDMODULES}" MATCHES "rocmcc"
@@ -31,7 +30,6 @@ elseif(
     #  set(CMAKE_HIP_FLAGS "-x hip")
     #endif()
     enable_language(HIP)
-    set(USE_HIP TRUE)
   endif()
 endif()
 
@@ -222,7 +220,6 @@ if("${GPU_DBS_STRING}" STREQUAL "CUDA" )
   set_target_properties(BRANSON PROPERTIES CUDA_STANDARD 17)
   string(APPEND CMAKE_CUDA_FLAGS " -g --expt-relaxed-constexpr")
   string(APPEND CMAKE_CUDA_FLAGS " --expt-extended-lambda"  )
-  add_compile_definitions(USE_CUDA)
   set_source_files_properties("main.cc" PROPERTIES LANGUAGE CUDA)
 elseif()
   # what do we do for HIP?
