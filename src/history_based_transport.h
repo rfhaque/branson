@@ -352,11 +352,14 @@ void gpu_transport_photons(const uint32_t rank_cell_offset,
 #ifdef ENABLE_VERBOSE_GPU_TRANSPORT
   int my_bus_id = 0;
   int my_device = 0;
-  cudaGetDevice(&my_device);
-  cudaDeviceGetAttribute(&my_bus_id, cudaDevAttrPciBusId, my_device);
+  auto get_device_error = cudaGetDevice(&my_device);
+  auto get_device_attribute_error = cudaDeviceGetAttribute(&my_bus_id, cudaDevAttrPciBusId, my_device);
+  Insist(!get_device_error, "ERROR: Error in <GPU_Type>GetDevice call");
+  Insist(!get_device_attribute_error, "ERROR: Error in <GPU_Type>GetDeviceAttribute call");
   std::cout << "--GPU data-- device: " << my_device << ", busID: " << my_bus_id << ", ";
   std::cout << "particle bytes for this batch: ";
   std::cout << n_batch_photons * (sizeof(Photon) + sizeof(int)) << std::endl;
+
 #endif
 
   // use this vector to track active indices in the particle vector
@@ -383,16 +386,17 @@ void gpu_transport_photons(const uint32_t rank_cell_offset,
   int n_blocks = (n_batch_photons + Constants::n_threads_per_block - 1) /
                  Constants::n_threads_per_block;
 
-  cudaDeviceSynchronize();
+  auto sync_error = cudaDeviceSynchronize();
+  if(!sync_error) std::cout<<"ERROR: <GPU_Type>DeviceSynchronize"<<std::endl;
 
   std::cout << "Launching with " << n_blocks << " blocks and ";
   std::cout << n_batch_photons << " photons" << std::endl;
   gpu_no_accel_transport<<<n_blocks, Constants::n_threads_per_block>>>(
       rank_cell_offset, device_photons_ptr, device_cells_ptr, device_cell_tallies_ptr, n_batch_photons);
 
-
   Insist(!(cudaGetLastError()), "CUDA error in transport kernel launch");
-  cudaDeviceSynchronize();
+  sync_error = cudaDeviceSynchronize();
+  if(!sync_error) std::cout<<"ERROR: <GPU_Type>DeviceSynchronize"<<std::endl;
 
   // copy particles back to host
   err = cudaMemcpy(cpu_photons.data(), device_photons_ptr, n_batch_photons * sizeof(Photon),
@@ -405,8 +409,10 @@ void gpu_transport_photons(const uint32_t rank_cell_offset,
   Insist(!err, "CUDA error in copying cell tallies back to host");
 
   // free device pointers for photons and cell tallies
-  cudaFree(device_photons_ptr);
-  cudaFree(device_cell_tallies_ptr);
+  err = cudaFree(device_photons_ptr);
+  Insist(!err, "CUDA error in freeing device side photons");
+  err = cudaFree(device_cell_tallies_ptr);
+  Insist(!err, "CUDA error in freeing device side cell tallies");
 
 #endif
 }

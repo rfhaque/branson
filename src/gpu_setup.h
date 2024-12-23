@@ -31,10 +31,10 @@ public:
       std::cout<<"Allocating and transferring "<<cpu_cells.size()<<" cell(s) to the GPU"<<std::endl;
       // allocate and copy cells
       cudaError_t err = cudaMalloc((void **)&device_cells_ptr, sizeof(Cell) * cpu_cells.size());
-      Insist(!err, "CUDA error in allocating cells data");
+      Insist(!err, "<GPU_Type> error in allocating cells data");
       err = cudaMemcpy(device_cells_ptr, cpu_cells.data(), sizeof(Cell) * cpu_cells.size(),
                        cudaMemcpyHostToDevice);
-      Insist(!err, "CUDA error in copying cells data");
+      Insist(!err, "<GPU_Type> error in copying cells data");
     }
 #endif
   }
@@ -45,7 +45,8 @@ public:
   ~GPU_Setup() {
 #ifdef HAS_GPU
     if(m_use_gpu_transporter) {
-      cudaFree(device_cells_ptr);
+      auto err = cudaFree(device_cells_ptr);
+      Insist(!err, "<GPU_Type> error in freeing device cell data");
     }
 #endif
   }
