@@ -3,7 +3,7 @@
  * \file   event_based_transport.h
  * \author Joseph Farmer
  * \date   Auhust 1 2024
- * \brief  IMC transport with an event-based algorithm 
+ * \brief  IMC transport with an event-based algorithm
  * \note   Copyright (C) 2024 Triad National Security, LLC.
  *         All rights reserved
  */
@@ -74,11 +74,11 @@ inline void calculate_distances(PhotonArray &photon_array, const Cell *cells, co
     events[i].distance = std::min(dist_to_scatter, std::min(dist_to_boundary, dist_to_census));
     events[i].photon_index = photon_index;
 
-    if (events[i].distance == dist_to_scatter) 
+    if (events[i].distance == dist_to_scatter)
       events[i].type = SCATTER;
     else if (events[i].distance == dist_to_boundary)
       events[i].type = BOUNDARY;
-    else 
+    else
       events[i].type = CENSUS;
   }
 }
@@ -97,11 +97,11 @@ inline void calculate_distances(std::vector<Photon> &photon_array, const Cell *c
     events[i].distance = std::min(dist_to_scatter, std::min(dist_to_boundary, dist_to_census));
     events[i].photon_index = photon_index;
 
-    if (events[i].distance == dist_to_scatter) 
+    if (events[i].distance == dist_to_scatter)
       events[i].type = SCATTER;
     else if (events[i].distance == dist_to_boundary)
       events[i].type = BOUNDARY;
-    else 
+    else
       events[i].type = CENSUS;
   }
 }
@@ -144,7 +144,7 @@ inline void process_scatter_events(std::vector<Photon> &photon_array, const std:
 }
 
 inline void process_boundary_events(PhotonArray &photon_array, const size_t *boundary_events, const Cell *cells, uint32_t rank_cell_offset, size_t boundary_count) {
-#pragma omp simd 
+#pragma omp simd
   for (size_t i = 0; i < boundary_count; ++i) {
     // size_t photon_index = boundary_events[i];
     uint32_t local_cell_index = photon_array.cell_ID[boundary_events[i]] - rank_cell_offset;
@@ -169,7 +169,7 @@ inline void process_boundary_events(PhotonArray &photon_array, const size_t *bou
 }
 
 inline void process_boundary_events(std::vector<Photon> &photon_array, const size_t *boundary_events, const Cell *cells, uint32_t rank_cell_offset, size_t boundary_count) {
-#pragma omp simd 
+#pragma omp simd
   for (size_t i = 0; i < boundary_count; ++i) {
     auto & phtn = photon_array[boundary_events[i]];
     uint32_t local_cell_index = phtn.get_cell() - rank_cell_offset;
@@ -258,7 +258,7 @@ for (size_t i = 0; i < active_count; ++i) {
 
 #pragma omp simd
   for (size_t i = 0; i < active_count; ++i) {
-    const Event &event = events[i]; 
+    const Event &event = events[i];
     size_t photon_index  = event.photon_index;
     if (photon_array.E[photon_index] / photon_array.E0[photon_index] < Constants::cutoff_fraction) {
       photon_array.descriptors[photon_index] = static_cast<unsigned char>(Constants::KILLED);
@@ -268,7 +268,7 @@ for (size_t i = 0; i < active_count; ++i) {
       case SCATTER:
         scatter_events[scatter_count++]  = photon_index;
         break;
-      case BOUNDARY: 
+      case BOUNDARY:
         boundary_events[boundary_count++]  = photon_index;
         break;
       case CENSUS:
@@ -312,7 +312,7 @@ for (size_t i = 0; i < active_count; ++i) {
 
 #pragma omp simd
   for (size_t i = 0; i < active_count; ++i) {
-    const Event &event = events[i]; 
+    const Event &event = events[i];
     size_t photon_index  = event.photon_index;
     if (photon_array[photon_index].below_cutoff(Constants::cutoff_fraction)) {
       photon_array[photon_index].set_descriptor(Constants::KILLED);
@@ -322,7 +322,7 @@ for (size_t i = 0; i < active_count; ++i) {
       case SCATTER:
         scatter_events[scatter_count++]  = photon_index;
         break;
-      case BOUNDARY: 
+      case BOUNDARY:
         boundary_events[boundary_count++]  = photon_index;
         break;
       case CENSUS:
@@ -337,7 +337,6 @@ for (size_t i = 0; i < active_count; ++i) {
 
 //----------------------------------------------------------------------------//
 //! Transport a photon when the mesh is always available
-GPU_HOST_DEVICE
 void event_transport_photon(const uint32_t rank_cell_offset, PhotonArray &photon_array, const Cell *cells, Cell_Tally *cell_tallies, size_t cellSize, const std::vector<EmissionGroupData> &emission_groups) {
 
   using Constants::bc_type;
@@ -350,8 +349,8 @@ void event_transport_photon(const uint32_t rank_cell_offset, PhotonArray &photon
   std::vector<Event> events(maxPhotons);
   std::vector<uint32_t> local_cell_indices(maxPhotons);
   std::vector<double> sigma_s(maxPhotons), sigma_a(maxPhotons), f(maxPhotons), total_sigma_s(maxPhotons);
-  
-  std::iota(active_photons.begin(), active_photons.end(), 0); 
+
+  std::iota(active_photons.begin(), active_photons.end(), 0);
 
   size_t active_count = maxPhotons;
   size_t counter = 0;
@@ -383,7 +382,6 @@ void event_transport_photon(const uint32_t rank_cell_offset, PhotonArray &photon
 
 //----------------------------------------------------------------------------//
 //! Transport a photon when the mesh is always available
-GPU_HOST_DEVICE
 void event_transport_photon(const uint32_t rank_cell_offset, std::vector<Photon> &photon_array, const Cell *cells, Cell_Tally *cell_tallies, size_t cellSize, const std::vector<EmissionGroupData> &emission_groups) {
 
   using Constants::bc_type;
@@ -396,8 +394,8 @@ void event_transport_photon(const uint32_t rank_cell_offset, std::vector<Photon>
   std::vector<Event> events(maxPhotons);
   std::vector<uint32_t> local_cell_indices(maxPhotons);
   std::vector<double> sigma_s(maxPhotons), sigma_a(maxPhotons), f(maxPhotons), total_sigma_s(maxPhotons);
-  
-  std::iota(active_photons.begin(), active_photons.end(), 0); 
+
+  std::iota(active_photons.begin(), active_photons.end(), 0);
 
   size_t active_count = maxPhotons;
   size_t counter = 0;
@@ -433,7 +431,7 @@ void cpu_event_transport_photons(const uint32_t rank_cell_offset,
 
   auto cpu_cells_ptr{cells.data()};
   const auto n_cells = cell_tallies.size();
-  
+
   event_transport_photon(rank_cell_offset, photon_array, cells.data(), cell_tallies.data(), cells.size(), emission_groups);
 }
 
@@ -443,7 +441,7 @@ void cpu_event_transport_photons(const uint32_t rank_cell_offset,
 
   auto cpu_cells_ptr{cells.data()};
   const auto n_cells = cell_tallies.size();
-  
+
   event_transport_photon(rank_cell_offset, photon_array, cells.data(), cell_tallies.data(), cells.size(), emission_groups);
 }
 #endif // def event_based_transport_h_
