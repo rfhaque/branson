@@ -231,7 +231,7 @@ Census_T  particle_pass_transport(
           std::cout<<"ERROR: Should not end transport with SCATTER event"<<std::endl;
           break;
         case Constants::BOUND:
-          std::cout<<"ERROR: Should not end transport with SCATTER event"<<std::endl;
+          std::cout<<"ERROR: Should not end transport with BOUND event"<<std::endl;
           break;
         case Constants::KILLED:
           n_complete++;

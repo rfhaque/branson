@@ -227,7 +227,7 @@ elseif("${GPU_DBS_STRING}" STREQUAL "HIP" )
   if(CMAKE_HIP_COMPILER MATCHES "CC")
     set(CMAKE_HIP_FLAGS "-x hip")
   endif()
-  set_target_properties(BRANSON PROPERTIES HIP_ARCHITECTURES "gfx942") # A100
+  set_target_properties(BRANSON PROPERTIES HIP_ARCHITECTURES "gfx942") # MI300
   set_target_properties(BRANSON PROPERTIES HIP_STANDARD 17)
   string(APPEND CMAKE_HIP_FLAGS " -g -mllvm=--disable-peephole")
   #string(APPEND CMAKE_HIP_FLAGS " --expt-extended-lambda"  )

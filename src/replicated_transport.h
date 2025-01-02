@@ -87,7 +87,6 @@ Census_T replicated_transport(
   } // CPU mode
   else {
     if (transport_algorithm == Constants::HISTORY) {
-      //std::cout<<"about to start history based"<<std::endl;
       history_cpu_transport_photons(rank_cell_offset, all_photons, mesh.get_cells(), cell_tallies, n_omp_threads);
       auto batch_complete = post_process_photons(next_dt, all_photons, census_list, census_E, exit_E);
     }
@@ -98,7 +97,6 @@ Census_T replicated_transport(
           emission_groups[i] = precompute_emission_group_data(mesh.get_cells()[i]);
         }
         // ARL: try batching this?
-        //std::cout<<"about to start aos event-based batch size of "<<batch_size<<" particles"<<std::endl;
         for (size_t batch_start = 0; batch_start < all_photons.size(); batch_start += batch_size) {
           size_t batch_end = std::min(batch_start + batch_size, all_photons.size());
 
@@ -115,7 +113,6 @@ Census_T replicated_transport(
           emission_groups[i] = precompute_emission_group_data(mesh.get_cells()[i]);
         }
 
-        //std::cout<<"about to start soa event-based, batch size of "<<batch_size<<" particles"<<std::endl;
         for (size_t batch_start = 0; batch_start < all_photons.size(); batch_start += batch_size) {
           size_t batch_end = std::min(batch_start + batch_size, all_photons.size());
 
