@@ -45,7 +45,7 @@ Census_T  particle_pass_transport(
   using std::vector;
 
   // is the GPU even available?
-  #ifdef USE_CUDA
+  #ifdef USE_GPU
   constexpr bool gpu_available = true;
   #else
   constexpr bool gpu_available = false;
@@ -227,6 +227,12 @@ Census_T  particle_pass_transport(
       for (auto &phtn : phtn_recv_list) {
         switch (phtn.get_descriptor()) {
         // this case should never be reached
+        case Constants::SCATTER:
+          std::cout<<"ERROR: Should not end transport with SCATTER event"<<std::endl;
+          break;
+        case Constants::BOUND:
+          std::cout<<"ERROR: Should not end transport with BOUND event"<<std::endl;
+          break;
         case Constants::KILLED:
           n_complete++;
           break;

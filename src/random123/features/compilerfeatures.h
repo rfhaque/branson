@@ -36,7 +36,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 The Random123 library is portable across C, C++, CUDA, OpenCL environments,
 and multiple operating systems (Linux, Windows 7, Mac OS X, FreeBSD, Solaris).
 This level of portability requires the abstraction of some features
-and idioms that are either not standardized (e.g., asm statments), or for which
+and idioms that are either not standardized (e.g., asm statments), or for which 
 different vendors have their own standards (e.g., SSE intrinsics) or for
 which vendors simply refuse to conform to well-established standards (e.g., <inttypes.h>).
 
@@ -55,7 +55,7 @@ Most of the symbols are boolean valued.  In general, they will
 Library users can override any value by defining the pp-symbol with a compiler option,
 e.g.,
 
-    cc -DR123_USE_MULHILO64_C99
+    cc -DR123_USE_MULHILO64_C99 
 
 will use a strictly c99 version of the full-width 64x64->128-bit multiplication
 function, even if it would be disabled by default.
@@ -83,8 +83,9 @@ All boolean-valued pre-processor symbols in Random123/features/compilerfeatures.
          CXX11_UNRESTRICTED_UNIONS
          CXX11_EXPLICIT_CONVERSIONS
          CXX11_LONG_LONG
-         CXX11
-
+         CXX11_STD_ARRAY
+         CXX11 
+   
          X86INTRIN_H
          IA32INTRIN_H
          XMMINTRIN_H
@@ -101,7 +102,7 @@ All boolean-valued pre-processor symbols in Random123/features/compilerfeatures.
          MULHILO64_C99
 
          U01_DOUBLE
-
+	 
 @endverbatim
 Most have obvious meanings.  Some non-obvious ones:
 
@@ -140,11 +141,11 @@ There are also non-boolean valued symbols:
 <ul>
 <li>R123_STATIC_INLINE -
   According to both C99 and GNU99, the 'static inline' declaration allows
-  the compiler to not emit code if the function is not used.
+  the compiler to not emit code if the function is not used.  
   Note that the semantics of 'inline', 'static' and 'extern' in
   gcc have changed over time and are subject to modification by
   command line options, e.g., -std=gnu89, -fgnu-inline.
-  Nevertheless, it appears that the meaning of 'static inline'
+  Nevertheless, it appears that the meaning of 'static inline' 
   has not changed over time and (with a little luck) the use of 'static inline'
   here will be portable between versions of gcc and to other C99
   compilers.
@@ -156,10 +157,14 @@ There are also non-boolean valued symbols:
   embellishments to strongly encourage that the declared function be
   inlined.  If there is no such compiler-specific magic, it should
   expand to decl, unadorned.
-
+   
 <li>R123_CUDA_DEVICE - which expands to __device__ (or something else with
   sufficiently similar semantics) when CUDA is in use, and expands
   to nothing in other cases.
+
+<li>R123_METAL_THREAD_ADDRESS_SPACE - which expands to 'thread' (or
+  something else with sufficiently similar semantics) when compiling a
+  Metal kernel, and expands to nothing in other cases.
 
 <li>R123_ASSERT(x) - which expands to assert(x), or maybe to nothing at
   all if we're in an environment so feature-poor that you can't even
@@ -187,30 +192,36 @@ There are also non-boolean valued symbols:
 \cond HIDDEN_FROM_DOXYGEN
 */
 
-/*
+/* 
 N.B.  When something is added to the list of features, it should be
 added to each of the *features.h files, AND to examples/ut_features.cpp.
 */
 
 /* N.B.  most other compilers (icc, nvcc, open64, llvm) will also define __GNUC__, so order matters. */
-#if defined(__OPENCL_VERSION__) && __OPENCL_VERSION__ > 0
+#if defined(__METAL_MACOS__)
+#include "metalfeatures.h"
+#elif defined(__OPENCL_VERSION__) && __OPENCL_VERSION__ > 0
 #include "openclfeatures.h"
 #elif defined(__CUDACC__)
 #include "nvccfeatures.h"
+#elif defined(__HIPCC__)
+#include "hipfeatures.h"
 #elif defined(__ICC)
 #include "iccfeatures.h"
-#elif defined(__xlC__)
+#elif defined(__xlC__) || defined(__ibmxl__)
 #include "xlcfeatures.h"
+#elif defined(__PGI)
+#include "pgccfeatures.h"
 #elif defined(__SUNPRO_C) || defined(__SUNPRO_CC)
 #include "sunprofeatures.h"
 #elif defined(__OPEN64__)
 #include "open64features.h"
-#elif defined(__clang__)
+#elif defined(__clang__) || defined(__bgclang__)
 #include "clangfeatures.h"
+#elif defined(__FCC_VERSION) || defined(__FUJITSU)
+#include "fujitsufeatures.h"
 #elif defined(__GNUC__)
 #include "gccfeatures.h"
-#elif defined(__PGI)
-#include "pgccfeatures.h"
 #elif defined(_MSC_FULL_VER)
 #include "msvcfeatures.h"
 #else
@@ -250,6 +261,10 @@ added to each of the *features.h files, AND to examples/ut_features.cpp.
 #define R123_USE_CXX11_LONG_LONG R123_USE_CXX11
 #endif
 
+#ifndef R123_USE_CXX11_STD_ARRAY
+#define R123_USE_CXX11_STD_ARRAY R123_USE_CXX11
+#endif
+
 #ifndef R123_USE_MULHILO64_C99
 #define R123_USE_MULHILO64_C99 0
 #endif
@@ -279,8 +294,12 @@ added to each of the *features.h files, AND to examples/ut_features.cpp.
 #endif
 #endif
 
+#ifndef R123_USE_64BIT
+#define R123_USE_64BIT 1
+#endif    
+
 #ifndef R123_USE_PHILOX_64BIT
-#define R123_USE_PHILOX_64BIT (R123_USE_MULHILO64_ASM || R123_USE_MULHILO64_MSVC_INTRIN || R123_USE_MULHILO64_CUDA_INTRIN || R123_USE_GNU_UINT128 || R123_USE_MULHILO64_C99 || R123_USE_MULHILO64_OPENCL_INTRIN || R123_USE_MULHILO64_MULHI_INTRIN)
+#define R123_USE_PHILOX_64BIT (R123_USE_64BIT && (R123_USE_MULHILO64_ASM || R123_USE_MULHILO64_MSVC_INTRIN || R123_USE_MULHILO64_CUDA_INTRIN || R123_USE_GNU_UINT128 || R123_USE_MULHILO64_C99 || R123_USE_MULHILO64_OPENCL_INTRIN || R123_USE_MULHILO64_MULHI_INTRIN))
 #endif
 
 #ifndef R123_ULONG_LONG
@@ -305,6 +324,14 @@ added to each of the *features.h files, AND to examples/ut_features.cpp.
 #define R123_THROW(x)    throw (x)
 #endif
 
+#ifndef R123_METAL_THREAD_ADDRESS_SPACE
+#define R123_METAL_THREAD_ADDRESS_SPACE
+#endif
+
+#ifndef R123_METAL_CONSTANT_ADDRESS_SPACE
+#define R123_METAL_CONSTANT_ADDRESS_SPACE
+#endif
+    
 /*
  * Windows.h (and perhaps other "well-meaning" code define min and
  * max, so there's a high chance that our definition of min, max
