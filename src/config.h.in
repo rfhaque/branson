@@ -100,7 +100,7 @@
 //! Add addend to t, use atomicAdd if built on a CUDA device
 template <class T>
 GPU_HOST_DEVICE inline void accumulate(T &target, T const addend) {
-  #ifdef __HIP_DEVICE_COMPILE__
+  #if defined( __HIP_DEVICE_COMPILE__) or defined(USE_CUDA)
   atomicAdd(&target, addend);
   #endif
   return;
