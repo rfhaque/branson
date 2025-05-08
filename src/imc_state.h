@@ -166,7 +166,7 @@ public:
   double get_total_transport_time(void) { return total_transport_time; }
 
   double get_photons_per_second_fom(uint64_t photons) {
-    return (double) photons/total_transport_time;
+    return static_cast<double>(photons)/total_transport_time;
   }
 
   //--------------------------------------------------------------------------//
