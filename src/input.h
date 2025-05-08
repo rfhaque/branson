@@ -559,7 +559,6 @@ public:
       MPI_Bcast(bcast_bcs.data(), 6, MPI_INT, 0, MPI_COMM_WORLD);
       for (int i = 0; i < 6; ++i)
         bc[i] = Constants::bc_type(bcast_bcs[i]);
-
       // receive and set uints
       MPI_Bcast(all_uint.data(), all_uint.size(), MPI_UNSIGNED, 0, MPI_COMM_WORLD);
       size_t i=0;

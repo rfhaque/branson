@@ -3,7 +3,7 @@
  * \file   event_based_transport.h
  * \author Joseph Farmer
  * \date   Auhust 1 2024
- * \brief  IMC transport with an event-based algorithm 
+ * \brief  IMC transport with an event-based algorithm
  * \note   Copyright (C) 2024 Triad National Security, LLC.
  *         All rights reserved
  */
@@ -73,11 +73,11 @@ inline void calculate_distances(PhotonArray &photon_array, const Cell *cells, co
     events[i].distance = std::min(dist_to_scatter, std::min(dist_to_boundary, dist_to_census));
     events[i].photon_index = photon_index;
 
-    if (events[i].distance == dist_to_scatter) 
+    if (events[i].distance == dist_to_scatter)
       events[i].type = SCATTER;
     else if (events[i].distance == dist_to_boundary)
       events[i].type = BOUNDARY;
-    else 
+    else
       events[i].type = CENSUS;
   }
 }
@@ -95,11 +95,11 @@ inline void calculate_distances(std::vector<Photon> &photon_array, const Cell *c
     events[i].distance = std::min(dist_to_scatter, std::min(dist_to_boundary, dist_to_census));
     events[i].photon_index = photon_index;
 
-    if (events[i].distance == dist_to_scatter) 
+    if (events[i].distance == dist_to_scatter)
       events[i].type = SCATTER;
     else if (events[i].distance == dist_to_boundary)
       events[i].type = BOUNDARY;
-    else 
+    else
       events[i].type = CENSUS;
   }
 }
@@ -254,7 +254,7 @@ for (size_t i = 0; i < active_count; ++i) {
 
   // note: don't want to vectoize this as counts are loop carried dependencies
   for (size_t i = 0; i < active_count; ++i) {
-    const Event &event = events[i]; 
+    const Event &event = events[i];
     size_t photon_index  = event.photon_index;
     if (photon_array.E[photon_index] / photon_array.E0[photon_index] < Constants::cutoff_fraction) {
       photon_array.descriptors[photon_index] = static_cast<unsigned char>(Constants::KILLED);
@@ -264,7 +264,7 @@ for (size_t i = 0; i < active_count; ++i) {
       case SCATTER:
         scatter_events[scatter_count++]  = photon_index;
         break;
-      case BOUNDARY: 
+      case BOUNDARY:
         boundary_events[boundary_count++]  = photon_index;
         break;
       case CENSUS:
@@ -308,7 +308,7 @@ for (size_t i = 0; i < active_count; ++i) {
 
   // note: don't want to vectoize this as counts are loop carried dependencies
   for (size_t i = 0; i < active_count; ++i) {
-    const Event &event = events[i]; 
+    const Event &event = events[i];
     size_t photon_index  = event.photon_index;
     if (photon_array[photon_index].below_cutoff(Constants::cutoff_fraction)) {
       photon_array[photon_index].set_descriptor(Constants::KILLED);
@@ -318,7 +318,7 @@ for (size_t i = 0; i < active_count; ++i) {
       case SCATTER:
         scatter_events[scatter_count++]  = photon_index;
         break;
-      case BOUNDARY: 
+      case BOUNDARY:
         boundary_events[boundary_count++]  = photon_index;
         break;
       case CENSUS:
@@ -333,7 +333,6 @@ for (size_t i = 0; i < active_count; ++i) {
 
 //----------------------------------------------------------------------------//
 //! Transport a photon when the mesh is always available
-GPU_HOST_DEVICE
 void event_transport_photon(const uint32_t rank_cell_offset, PhotonArray &photon_array, const Cell *cells, Cell_Tally *cell_tallies, size_t cellSize, const std::vector<EmissionGroupData> &emission_groups) {
 
   using Constants::bc_type;
@@ -347,8 +346,8 @@ void event_transport_photon(const uint32_t rank_cell_offset, PhotonArray &photon
   std::vector<uint32_t> local_cell_indices(maxPhotons);
   std::vector<uint32_t> surface_cross(maxPhotons);
   std::vector<double> sigma_s(maxPhotons), sigma_a(maxPhotons), f(maxPhotons), total_sigma_s(maxPhotons);
-  
-  std::iota(active_photons.begin(), active_photons.end(), 0); 
+
+  std::iota(active_photons.begin(), active_photons.end(), 0);
 
   size_t active_count = maxPhotons;
   size_t counter = 0;
@@ -380,7 +379,6 @@ void event_transport_photon(const uint32_t rank_cell_offset, PhotonArray &photon
 
 //----------------------------------------------------------------------------//
 //! Transport a photon when the mesh is always available
-GPU_HOST_DEVICE
 void event_transport_photon(const uint32_t rank_cell_offset, std::vector<Photon> &photon_array, const Cell *cells, Cell_Tally *cell_tallies, size_t cellSize, const std::vector<EmissionGroupData> &emission_groups) {
 
   using Constants::bc_type;
@@ -394,8 +392,8 @@ void event_transport_photon(const uint32_t rank_cell_offset, std::vector<Photon>
   std::vector<uint32_t> local_cell_indices(maxPhotons);
   std::vector<uint32_t> surface_cross(maxPhotons);
   std::vector<double> sigma_s(maxPhotons), sigma_a(maxPhotons), f(maxPhotons), total_sigma_s(maxPhotons);
-  
-  std::iota(active_photons.begin(), active_photons.end(), 0); 
+
+  std::iota(active_photons.begin(), active_photons.end(), 0);
 
   size_t active_count = maxPhotons;
   size_t counter = 0;
