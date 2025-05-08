@@ -53,7 +53,8 @@ public:
     source_E = 0.0;
 
     // 64 bit
-    trans_particles = 0;
+    step_n_trans_particles = 0;
+    sim_n_trans_particles = 0;
     census_size = 0;
     step_particles_sent = 0;
     total_particles_sent = 0;
@@ -91,7 +92,7 @@ public:
   uint32_t get_step(void) const { return m_step; }
 
   //! Get transported particles for current timestep
-  uint64_t get_transported_particles(void) const { return trans_particles; }
+  uint64_t get_transported_particles(void) const { return step_n_trans_particles; }
 
   //! Get number of particles in census
   uint64_t get_census_size(void) const { return census_size; }
@@ -152,6 +153,8 @@ public:
       cout << "Total particles sent: " << total_particles_sent << endl;
       cout << "Total particle messages: " << total_particle_messages << endl;
     }
+    cout << "Total photons transpored: "<< sim_n_trans_particles << endl;
+    cout << "Photons Per Second (FOM): "<< static_cast<double>(sim_n_trans_particles) / total_transport_time << endl;
     cout << "****************************************";
     cout << "****************************************" << endl;
   }
@@ -161,6 +164,10 @@ public:
 
   //! Get total transport time (max time summed across all timesteps)
   double get_total_transport_time(void) { return total_transport_time; }
+
+  double get_photons_per_second_fom(uint64_t photons) {
+    return static_cast<double>(photons)/total_transport_time;
+  }
 
   //--------------------------------------------------------------------------//
   // non-const functions                                                      //
@@ -188,7 +195,7 @@ public:
     double min_transport_time = 0.0;
     // 64 bit global integers
     uint64_t g_census_size = 0;
-    uint64_t g_trans_particles = 0;
+    uint64_t g_step_n_trans_particles = 0;
     uint64_t g_step_particles_sent = 0;
     uint64_t g_step_particle_messages = 0;
     uint64_t g_step_cells_requested = 0;
@@ -224,7 +231,7 @@ public:
 
     // reduce diagnostic values
     // 64 bit integer reductions
-    MPI_Allreduce(&trans_particles, &g_trans_particles, 1, MPI_UNSIGNED_LONG,
+    MPI_Allreduce(&step_n_trans_particles, &g_step_n_trans_particles, 1, MPI_UNSIGNED_LONG,
                   MPI_SUM, MPI_COMM_WORLD);
     MPI_Allreduce(&step_particles_sent, &g_step_particles_sent, 1,
                   MPI_UNSIGNED_LONG, MPI_SUM, MPI_COMM_WORLD);
@@ -256,9 +263,10 @@ public:
     // update total simulation counters
     total_particles_sent += g_step_particles_sent;
     total_particle_messages += g_step_particle_messages;
+    sim_n_trans_particles += g_step_n_trans_particles;
 
     if (rank == 0) {
-      cout << "Total Photons transported: " << g_trans_particles << endl;
+      cout << "Total Photons transported: " << g_step_n_trans_particles << endl;
       cout << "Emission E: " << g_emission_E << ", Source E: " <<g_source_E
            << ", Absorption E: " << g_absorbed_E;
       cout << ", Exit E: " << g_exit_E << endl;
@@ -319,7 +327,7 @@ public:
 
   //! set particles transported for current timestep (diagnostic, 64 bit)
   void set_transported_particles(uint64_t _trans_particles) {
-    trans_particles = _trans_particles;
+    step_n_trans_particles = _trans_particles;
   }
 
   //! Set number of census particles for current timestep (diagnostic, 64 bit)
@@ -437,7 +445,6 @@ public:
                     << std::endl;
     }
 
-
   }
   //--------------------------------------------------------------------------//
   // member data                                                              //
@@ -463,16 +470,14 @@ private:
   double source_E;      //!< Sourced energy
 
   // diagnostic 64 bit integers relating to particle and cell counts
-  uint64_t trans_particles; //!< Particles transported
+  uint64_t step_n_trans_particles; //!< Particles transported this timestep
+  uint64_t sim_n_trans_particles; //!< Particles transported this simulation
   uint64_t census_size;     //!< Number of particles in census
 
   uint64_t step_particles_sent; //!< Number of particles passed
 
   //! Total number of particles sent for simulation
   uint64_t total_particles_sent;
-
-  //! Total number of cells requested for simulation
-  uint64_t total_cells_requested;
 
   //! Total number of particle messages sent for simulation
   uint32_t total_particle_messages;

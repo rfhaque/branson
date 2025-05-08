@@ -49,7 +49,7 @@ public:
              const Info &mpi_info)
       : ngx(input.get_global_n_x_cells()), ngy(input.get_global_n_y_cells()),
         ngz(input.get_global_n_z_cells()), rank(mpi_info.get_rank()),
-        n_rank(mpi_info.get_n_rank()), n_off_rank(n_rank - 1),
+        n_rank(mpi_info.get_n_rank()), 
         silo_x(input.get_silo_x_ptr()), silo_y(input.get_silo_y_ptr()),
         silo_z(input.get_silo_z_ptr()) {
     using Constants::bc_type;
@@ -448,7 +448,6 @@ private:
 
   int32_t rank;       //!< MPI rank of this mesh
   int32_t n_rank;     //!< Number of global ranks
-  int32_t n_off_rank; //!< Number of other ranks
 
   float const *const silo_x; //!< Global array of x face locations for SILO
   float const *const silo_y; //!< Global array of y face locations for SILO

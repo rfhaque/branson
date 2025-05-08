@@ -68,7 +68,7 @@ Census_T  particle_pass_transport(
   t_transport.start_timer("timestep_transport");
 
   // Number of particles to run between MPI communication
-  const uint32_t batch_size = imc_parameters.get_batch_size();
+  //const uint32_t batch_size = imc_parameters.get_batch_size();
 
   // Preferred size of MPI message
   const uint32_t max_buffer_size = imc_parameters.get_particle_message_size();

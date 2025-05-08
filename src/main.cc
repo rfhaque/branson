@@ -53,8 +53,9 @@ int main(int argc, char **argv) {
       cout << "-------- Branson, a massively parallel proxy app for Implicit "
               "Monte Carlo ------"
            << endl;
-      cout << "-------- Author: Alex Long (along@lanl.gov) "
-              "------------------------------------"
+      cout << "-------- Authors: Alex Long (along@lanl.gov), Kendra Long (keadyk@lanl.gov), "
+           << "Kelly Thompson (kgt@lanl.gov), and Joseph Farmer (University of Notre Dame)"
+              "--------"
            << endl;
       cout << "-------- Version: 0.83"
               "----------------------------------------------------------"
@@ -142,6 +143,8 @@ int main(int argc, char **argv) {
       imc_state.print_simulation_footer(input.get_dd_mode());
       timers.print_timers();
       cout<<"Total transport: "<<imc_state.get_total_transport_time()<<endl;
+      cout<<"Photons Per Second (FOM): "<<
+        imc_state.get_photons_per_second_fom(imc_p.get_n_user_photons())<<endl;
     }
 
   } // end main loop scope, objects destroyed here

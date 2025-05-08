@@ -86,9 +86,9 @@ Census_T replicated_transport(
     }
   } // CPU mode
   else {
-    if (transport_algorithm == Constants::HISTORY) {
+    if (transport_algorithm == Constants::HISTORY) { 
       history_cpu_transport_photons(rank_cell_offset, all_photons, mesh.get_cells(), cell_tallies, n_omp_threads);
-      auto batch_complete = post_process_photons(next_dt, all_photons, census_list, census_E, exit_E);
+      post_process_photons(next_dt, all_photons, census_list, census_E, exit_E);
     }
     else if(transport_algorithm ==Constants::EVENT) {
       if constexpr(std::is_same_v<Census_T, std::vector<Photon>>) {
@@ -96,7 +96,6 @@ Census_T replicated_transport(
         for (size_t i = 0; i < mesh.get_n_local_cells(); ++i) {
           emission_groups[i] = precompute_emission_group_data(mesh.get_cells()[i]);
         }
-        // ARL: try batching this?
         for (size_t batch_start = 0; batch_start < all_photons.size(); batch_start += batch_size) {
           size_t batch_end = std::min(batch_start + batch_size, all_photons.size());
 
@@ -104,7 +103,7 @@ Census_T replicated_transport(
           cpu_event_transport_photons(rank_cell_offset, batch_photons, mesh.get_cells(), cell_tallies, n_omp_threads, emission_groups);
 
           // post process photons, account for escaped energy and add particles to census
-          auto batch_complete = post_process_photons(next_dt, batch_photons, census_list, census_E, exit_E);
+          post_process_photons(next_dt, batch_photons, census_list, census_E, exit_E);
         }
       }
       else {
@@ -120,7 +119,7 @@ Census_T replicated_transport(
           cpu_event_transport_photons(rank_cell_offset, batch_photons, mesh.get_cells(), cell_tallies, n_omp_threads, emission_groups);
 
           // post process photons, account for escaped energy and add particles to census
-          auto batch_complete = post_process_photons(next_dt, batch_photons, census_list, census_E, exit_E);
+          post_process_photons(next_dt, batch_photons, census_list, census_E, exit_E);
         }
       }
     }
@@ -130,9 +129,7 @@ Census_T replicated_transport(
   }
 
   // copy cell tallies back out to rank_abs_E and rank_track_E
-  double total_abs = 0;
   for (size_t i = 0; i<cell_tallies.size();++i) {
-    total_abs+=cell_tallies[i].get_abs_E();
     rank_abs_E[i] = cell_tallies[i].get_abs_E();
     rank_track_E[i] = cell_tallies[i].get_track_E();
   }
