@@ -53,8 +53,9 @@ int main(int argc, char **argv) {
       cout << "-------- Branson, a massively parallel proxy app for Implicit "
               "Monte Carlo ------"
            << endl;
-      cout << "-------- Author: Alex Long (along@lanl.gov) "
-              "------------------------------------"
+      cout << "-------- Authors: Alex Long (along@lanl.gov), Kendra Long (keadky@lanl.gov), "
+           << "Kelly Thompson (kgt@lanl.gov), and Joseph Farmer (University of Notre Dame)"
+              "--------"
            << endl;
       cout << "-------- Version: 0.83"
               "----------------------------------------------------------"

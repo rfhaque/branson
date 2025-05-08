@@ -476,9 +476,6 @@ private:
   //! Total number of particles sent for simulation
   uint64_t total_particles_sent;
 
-  //! Total number of cells requested for simulation
-  uint64_t total_cells_requested;
-
   //! Total number of particle messages sent for simulation
   uint32_t total_particle_messages;
 

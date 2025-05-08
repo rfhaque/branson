@@ -429,9 +429,6 @@ void event_transport_photon(const uint32_t rank_cell_offset, std::vector<Photon>
 void cpu_event_transport_photons(const uint32_t rank_cell_offset,
     PhotonArray &photon_array, const std::vector<Cell> &cells, std::vector<Cell_Tally> &cell_tallies, int n_omp_threads, const std::vector<EmissionGroupData> &emission_groups) {
 
-  auto cpu_cells_ptr{cells.data()};
-  const auto n_cells = cell_tallies.size();
-  
   event_transport_photon(rank_cell_offset, photon_array, cells.data(), cell_tallies.data(), cells.size(), emission_groups);
 }
 
@@ -439,9 +436,6 @@ void cpu_event_transport_photons(const uint32_t rank_cell_offset,
 void cpu_event_transport_photons(const uint32_t rank_cell_offset,
     std::vector<Photon> &photon_array, const std::vector<Cell> &cells, std::vector<Cell_Tally> &cell_tallies, int n_omp_threads, const std::vector<EmissionGroupData> &emission_groups) {
 
-  auto cpu_cells_ptr{cells.data()};
-  const auto n_cells = cell_tallies.size();
-  
   event_transport_photon(rank_cell_offset, photon_array, cells.data(), cell_tallies.data(), cells.size(), emission_groups);
 }
 #endif // def event_based_transport_h_

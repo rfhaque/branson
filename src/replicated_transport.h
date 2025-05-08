@@ -88,7 +88,7 @@ Census_T replicated_transport(
     if (transport_algorithm == Constants::HISTORY) { 
       //std::cout<<"about to start history based"<<std::endl;
       history_cpu_transport_photons(rank_cell_offset, all_photons, mesh.get_cells(), cell_tallies, n_omp_threads);
-      auto batch_complete = post_process_photons(next_dt, all_photons, census_list, census_E, exit_E);
+      post_process_photons(next_dt, all_photons, census_list, census_E, exit_E);
     }
     else if(transport_algorithm ==Constants::EVENT) {
       if constexpr(std::is_same_v<Census_T, std::vector<Photon>>) { 
@@ -105,7 +105,7 @@ Census_T replicated_transport(
           cpu_event_transport_photons(rank_cell_offset, batch_photons, mesh.get_cells(), cell_tallies, n_omp_threads, emission_groups);
 
           // post process photons, account for escaped energy and add particles to census
-          auto batch_complete = post_process_photons(next_dt, batch_photons, census_list, census_E, exit_E);
+          post_process_photons(next_dt, batch_photons, census_list, census_E, exit_E);
         }
       }
       else {
@@ -122,7 +122,7 @@ Census_T replicated_transport(
           cpu_event_transport_photons(rank_cell_offset, batch_photons, mesh.get_cells(), cell_tallies, n_omp_threads, emission_groups);
 
           // post process photons, account for escaped energy and add particles to census
-          auto batch_complete = post_process_photons(next_dt, batch_photons, census_list, census_E, exit_E);
+          post_process_photons(next_dt, batch_photons, census_list, census_E, exit_E);
         }
       }
     }
@@ -132,9 +132,7 @@ Census_T replicated_transport(
   }
 
   // copy cell tallies back out to rank_abs_E and rank_track_E
-  double total_abs = 0;
   for (size_t i = 0; i<cell_tallies.size();++i) {
-    total_abs+=cell_tallies[i].get_abs_E();
     rank_abs_E[i] = cell_tallies[i].get_abs_E();
     rank_track_E[i] = cell_tallies[i].get_track_E();
   }

@@ -63,7 +63,6 @@ public:
   }
 
   void add_photon(const PhotonArray &source, size_t index) {
-    size_t new_index = cell_ID.size();
     cell_ID.push_back(source.cell_ID[index]);
     group.push_back(source.group[index]);
     source_type.push_back(source.source_type[index]);
