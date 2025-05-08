@@ -62,14 +62,13 @@ inline void precompute_data(const uint32_t rank_cell_offset, const std::vector<P
   }
 }
 
-inline void calculate_distances(PhotonArray &photon_array, const Cell *cells, const size_t *active_photons, size_t active_count, const std::vector<double> &total_sigma_s, const std::vector<uint32_t> &local_cell_indices, std::vector<Event> &events) {
+inline void calculate_distances(PhotonArray &photon_array, const Cell *cells, const size_t *active_photons, size_t active_count, const std::vector<double> &total_sigma_s, const std::vector<uint32_t> &local_cell_indices, std::vector<Event> &events, std::vector<uint32_t> &surface_cross) {
 #pragma omp simd
   for (size_t i = 0; i < active_count; ++i) {
     size_t photon_index = active_photons[i];
     Cell const *cell = &cells[local_cell_indices[i]];
-    uint32_t surface_cross = 0;
     const double dist_to_scatter = (total_sigma_s[i] > 0.0) ? -log(photon_array.rng[photon_index].generate_random_number()) / total_sigma_s[i] : 1e100;
-    const double dist_to_boundary = cell->get_distance_to_boundary(photon_array.pos[photon_index], photon_array.angle[photon_index], surface_cross);
+    const double dist_to_boundary = cell->get_distance_to_boundary(photon_array.pos[photon_index], photon_array.angle[photon_index], surface_cross[photon_index]);
     const double dist_to_census = photon_array.life_dx[photon_index];
     events[i].distance = std::min(dist_to_scatter, std::min(dist_to_boundary, dist_to_census));
     events[i].photon_index = photon_index;
@@ -83,16 +82,15 @@ inline void calculate_distances(PhotonArray &photon_array, const Cell *cells, co
   }
 }
 
-inline void calculate_distances(std::vector<Photon> &photon_array, const Cell *cells, const size_t *active_photons, size_t active_count, const std::vector<double> &total_sigma_s, const std::vector<uint32_t> &local_cell_indices, std::vector<Event> &events) {
+inline void calculate_distances(std::vector<Photon> &photon_array, const Cell *cells, const size_t *active_photons, size_t active_count, const std::vector<double> &total_sigma_s, const std::vector<uint32_t> &local_cell_indices, std::vector<Event> &events, std::vector<uint32_t> &surface_cross) {
 #pragma omp simd
   for (size_t i = 0; i < active_count; ++i) {
     size_t photon_index = active_photons[i];
     auto &phtn = photon_array[photon_index];
     Cell const *cell = &cells[local_cell_indices[i]];
     auto &rng = photon_array[i].get_rng();
-    uint32_t surface_cross = 0;
     const double dist_to_scatter = (total_sigma_s[i] > 0.0) ? -log(rng.generate_random_number()) / total_sigma_s[i] : 1e100;
-    const double dist_to_boundary = cell->get_distance_to_boundary(phtn.get_position(), phtn.get_angle(), surface_cross);
+    const double dist_to_boundary = cell->get_distance_to_boundary(phtn.get_position(), phtn.get_angle(), surface_cross[photon_index]);
     const double dist_to_census = phtn.get_distance_remaining();
     events[i].distance = std::min(dist_to_scatter, std::min(dist_to_boundary, dist_to_census));
     events[i].photon_index = photon_index;
@@ -143,50 +141,48 @@ inline void process_scatter_events(std::vector<Photon> &photon_array, const std:
   }
 }
 
-inline void process_boundary_events(PhotonArray &photon_array, const size_t *boundary_events, const Cell *cells, uint32_t rank_cell_offset, size_t boundary_count) {
+inline void process_boundary_events(PhotonArray &photon_array, const size_t *boundary_events, const Cell *cells, uint32_t rank_cell_offset, size_t boundary_count, std::vector<uint32_t> &surface_cross) {
 #pragma omp simd 
   for (size_t i = 0; i < boundary_count; ++i) {
     // size_t photon_index = boundary_events[i];
     uint32_t local_cell_index = photon_array.cell_ID[boundary_events[i]] - rank_cell_offset;
+    uint32_t event_surface_cross = surface_cross[boundary_events[i]];
     Cell const *cell = &cells[local_cell_index];
-    uint32_t surface_cross = 0;
-    cell->get_distance_to_boundary(photon_array.pos[boundary_events[i]], photon_array.angle[boundary_events[i]], surface_cross);
-    auto boundary_event = cell->get_bc(surface_cross);
+    auto boundary_event = cell->get_bc(event_surface_cross);
     if (boundary_event == Constants::ELEMENT) {
-      photon_array.cell_ID[boundary_events[i]] = cell->get_next_cell(surface_cross);
+      photon_array.cell_ID[boundary_events[i]] = cell->get_next_cell(event_surface_cross);
       photon_array.descriptors[boundary_events[i]] = static_cast<unsigned char>(Constants::BOUND);
     } else if (boundary_event == Constants::PROCESSOR) {
-      photon_array.cell_ID[boundary_events[i]] = cell->get_next_cell(surface_cross);
+      photon_array.cell_ID[boundary_events[i]] = cell->get_next_cell(event_surface_cross);
       photon_array.descriptors[boundary_events[i]] = static_cast<unsigned char>(Constants::PASS);
     } else if (boundary_event == Constants::VACUUM || boundary_event == Constants::SOURCE) {
       photon_array.descriptors[boundary_events[i]] = static_cast<unsigned char>(Constants::EXIT);
     } else {
-      int reflect_angle = surface_cross / 2;
+      int reflect_angle = event_surface_cross / 2;
       photon_array.angle[boundary_events[i]][reflect_angle] = -photon_array.angle[boundary_events[i]][reflect_angle];
       photon_array.descriptors[boundary_events[i]] = static_cast<unsigned char>(Constants::BOUND);
     }
   }
 }
 
-inline void process_boundary_events(std::vector<Photon> &photon_array, const size_t *boundary_events, const Cell *cells, uint32_t rank_cell_offset, size_t boundary_count) {
+inline void process_boundary_events(std::vector<Photon> &photon_array, const size_t *boundary_events, const Cell *cells, uint32_t rank_cell_offset, size_t boundary_count, std::vector<uint32_t> &surface_cross) {
 #pragma omp simd 
   for (size_t i = 0; i < boundary_count; ++i) {
     auto & phtn = photon_array[boundary_events[i]];
     uint32_t local_cell_index = phtn.get_cell() - rank_cell_offset;
+    uint32_t event_surface_cross = surface_cross[boundary_events[i]];
     Cell const *cell = &cells[local_cell_index];
-    uint32_t surface_cross = 0;
-    cell->get_distance_to_boundary(phtn.get_position(), phtn.get_angle(), surface_cross);
-    auto boundary_event = cell->get_bc(surface_cross);
+    auto boundary_event = cell->get_bc(event_surface_cross);
     if (boundary_event == Constants::ELEMENT) {
-      phtn.set_cell(cell->get_next_cell(surface_cross));
+      phtn.set_cell(cell->get_next_cell(event_surface_cross));
       phtn.set_descriptor(Constants::BOUND);
     } else if (boundary_event == Constants::PROCESSOR) {
-      phtn.set_cell(cell->get_next_cell(surface_cross));
+      phtn.set_cell(cell->get_next_cell(event_surface_cross));
       phtn.set_descriptor(Constants::PASS);
     } else if (boundary_event == Constants::VACUUM || boundary_event == Constants::SOURCE) {
       phtn.set_descriptor(Constants::EXIT);
     } else {
-      phtn.reflect(surface_cross);
+      phtn.reflect(event_surface_cross);
       phtn.set_descriptor(Constants::BOUND);
     }
   }
@@ -256,7 +252,7 @@ for (size_t i = 0; i < active_count; ++i) {
     photon_array.life_dx[events[i].photon_index] -= events[i].distance;
   }
 
-#pragma omp simd
+  // note: don't want to vectoize this as counts are loop carried dependencies
   for (size_t i = 0; i < active_count; ++i) {
     const Event &event = events[i]; 
     size_t photon_index  = event.photon_index;
@@ -310,7 +306,7 @@ for (size_t i = 0; i < active_count; ++i) {
     photon_array[events[i].photon_index].move(events[i].distance);
   }
 
-#pragma omp simd
+  // note: don't want to vectoize this as counts are loop carried dependencies
   for (size_t i = 0; i < active_count; ++i) {
     const Event &event = events[i]; 
     size_t photon_index  = event.photon_index;
@@ -349,6 +345,7 @@ void event_transport_photon(const uint32_t rank_cell_offset, PhotonArray &photon
   std::vector<size_t> scatter_events(maxPhotons), boundary_events(maxPhotons), census_events(maxPhotons), killed_events(maxPhotons), active_photons(maxPhotons);
   std::vector<Event> events(maxPhotons);
   std::vector<uint32_t> local_cell_indices(maxPhotons);
+  std::vector<uint32_t> surface_cross(maxPhotons);
   std::vector<double> sigma_s(maxPhotons), sigma_a(maxPhotons), f(maxPhotons), total_sigma_s(maxPhotons);
   
   std::iota(active_photons.begin(), active_photons.end(), 0); 
@@ -360,12 +357,12 @@ void event_transport_photon(const uint32_t rank_cell_offset, PhotonArray &photon
     size_t scatter_count = 0, boundary_count = 0, census_count = 0, killed_count = 0;
 
     precompute_data(rank_cell_offset, photon_array, cells, active_photons.data(), active_count, sigma_s, sigma_a, f, total_sigma_s, local_cell_indices);
-    calculate_distances(photon_array, cells, active_photons.data(), active_count, total_sigma_s, local_cell_indices, events);
+    calculate_distances(photon_array, cells, active_photons.data(), active_count, total_sigma_s, local_cell_indices, events, surface_cross);
     update_photon_state(photon_array, cell_tallies, events, sigma_a, f , local_cell_indices, active_count, scatter_events, boundary_events, census_events, killed_events, scatter_count, boundary_count, census_count, killed_count, cellSize);
 
     process_scatter_events(photon_array, sigma_s, total_sigma_s, local_cell_indices, cells, scatter_events.data(), scatter_count, counter, emission_groups);
     process_census_events(photon_array, census_events.data(), census_count);
-    process_boundary_events(photon_array, boundary_events.data(), cells, rank_cell_offset, boundary_count);
+    process_boundary_events(photon_array, boundary_events.data(), cells, rank_cell_offset, boundary_count, surface_cross);
     process_killed_events(photon_array, killed_events.data(), cells,  cell_tallies, rank_cell_offset, killed_count);
 
     active_photons.erase(std::remove_if(active_photons.begin(), active_photons.end(), [&photon_array](size_t index){
@@ -395,6 +392,7 @@ void event_transport_photon(const uint32_t rank_cell_offset, std::vector<Photon>
   std::vector<size_t> scatter_events(maxPhotons), boundary_events(maxPhotons), census_events(maxPhotons), killed_events(maxPhotons), active_photons(maxPhotons);
   std::vector<Event> events(maxPhotons);
   std::vector<uint32_t> local_cell_indices(maxPhotons);
+  std::vector<uint32_t> surface_cross(maxPhotons);
   std::vector<double> sigma_s(maxPhotons), sigma_a(maxPhotons), f(maxPhotons), total_sigma_s(maxPhotons);
   
   std::iota(active_photons.begin(), active_photons.end(), 0); 
@@ -406,12 +404,12 @@ void event_transport_photon(const uint32_t rank_cell_offset, std::vector<Photon>
     size_t scatter_count = 0, boundary_count = 0, census_count = 0, killed_count = 0;
 
     precompute_data(rank_cell_offset, photon_array, cells, active_photons.data(), active_count, sigma_s, sigma_a, f, total_sigma_s, local_cell_indices);
-    calculate_distances(photon_array, cells, active_photons.data(), active_count, total_sigma_s, local_cell_indices, events);
+    calculate_distances(photon_array, cells, active_photons.data(), active_count, total_sigma_s, local_cell_indices, events, surface_cross);
     update_photon_state(photon_array, cell_tallies, events, sigma_a, f , local_cell_indices, active_count, scatter_events, boundary_events, census_events, killed_events, scatter_count, boundary_count, census_count, killed_count, cellSize);
 
     process_scatter_events(photon_array, sigma_s, total_sigma_s, local_cell_indices, cells, scatter_events.data(), scatter_count, counter, emission_groups);
     process_census_events(photon_array, census_events.data(), census_count);
-    process_boundary_events(photon_array, boundary_events.data(), cells, rank_cell_offset, boundary_count);
+    process_boundary_events(photon_array, boundary_events.data(), cells, rank_cell_offset, boundary_count, surface_cross);
     process_killed_events(photon_array, killed_events.data(), cells,  cell_tallies, rank_cell_offset, killed_count);
 
     active_photons.erase(std::remove_if(active_photons.begin(), active_photons.end(), [&photon_array](size_t index){
