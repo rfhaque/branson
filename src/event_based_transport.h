@@ -252,7 +252,7 @@ for (size_t i = 0; i < active_count; ++i) {
     photon_array.life_dx[events[i].photon_index] -= events[i].distance;
   }
 
-  // note: don't want to vectoize this as counts are loop carried dependencies
+  // note: don't want to vectorize this as counts are loop carried dependencies
   for (size_t i = 0; i < active_count; ++i) {
     const Event &event = events[i];
     size_t photon_index  = event.photon_index;
@@ -306,7 +306,7 @@ for (size_t i = 0; i < active_count; ++i) {
     photon_array[events[i].photon_index].move(events[i].distance);
   }
 
-  // note: don't want to vectoize this as counts are loop carried dependencies
+  // note: don't want to vectorize this as counts are loop carried dependencies
   for (size_t i = 0; i < active_count; ++i) {
     const Event &event = events[i];
     size_t photon_index  = event.photon_index;
