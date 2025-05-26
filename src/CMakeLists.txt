@@ -9,7 +9,7 @@
 # Enbable debug mode by passing -DCMAKE_BUILD_TYPE=Debug to CMake, default is
 # Release
 
-cmake_minimum_required(VERSION 3.23)
+cmake_minimum_required (VERSION 3.23)
 
 project (BRANSON
   VERSION 0.8
@@ -178,15 +178,17 @@ endif()
 message("GPU_DBS_STRING: ${GPU_DBS_STRING}")
 
 # Build system support files are located here.
-set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/config ${CMAKE_MODULE_PATH})
+set( CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/config ${CMAKE_MODULE_PATH})
 
-message("This is ${CMAKE_PROJECT_NAME} v. ${PROJECT_VERSION}.")
+message( "
+This is ${CMAKE_PROJECT_NAME} v. ${PROJECT_VERSION}.
+")
 
 #------------------------------------------------------------------------------#
 # User configurable options
 
 set (BRANSON_N_GROUPS ${N_GROUPS})
-if(NOT BRANSON_N_GROUPS)
+if (NOT BRANSON_N_GROUPS)
   message(STATUS
     "HARDCODED NUMBER OF GROUPS NOT SET, DEFAULTING TO ONE GROUP (GRAY)
      use '-DN_GROUPS=<int>' when running cmake to select multigroup.\n")
@@ -202,10 +204,10 @@ set(ENABLE_VERBOSE_GPU_TRANSPORT ${ENABLE_VERBOSE_GPU_TRANSPORT} CACHE STRING "F
 #------------------------------------------------------------------------------#
 # Record the site name
 
-site_name(SITENAME)
-string(REGEX REPLACE "([A-z0-9]+).*" "\\1" SITENAME ${SITENAME})
+site_name( SITENAME )
+string( REGEX REPLACE "([A-z0-9]+).*" "\\1" SITENAME ${SITENAME} )
 include (lanl-setup)
-set(SITENAME ${SITENAME} CACHE "STRING" "Name of the current machine" FORCE)
+set( SITENAME ${SITENAME} CACHE "STRING" "Name of the current machine" FORCE)
 
 # GCC options for address or undefined sanitizing
 #set(GCC_SANITIZE_COMPILE_FLAGS "-fsanitize=address")
@@ -214,11 +216,11 @@ set(SITENAME ${SITENAME} CACHE "STRING" "Name of the current machine" FORCE)
 #set(GCC_SANITIZE_LINK_FLAGS "-fsanitize=undefined")
 
 # add compiler flags
-if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=native -ffp-contract=off")
-  set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -Wall -O0")
-  #set(CMAKE_CXX_FLAGS_RELEASE "-march=native  -O3 -funroll-loops -fno-var-tracking-assignments")
-  set(CMAKE_CXX_FLAGS_RELEASE "-g -O3 -funroll-loops -fno-var-tracking-assignments")
+if( CMAKE_CXX_COMPILER_ID STREQUAL "GNU" )
+  set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=native -ffp-contract=off")
+  set( CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -Wall -O0")
+  #set( CMAKE_CXX_FLAGS_RELEASE "-march=native  -O3 -funroll-loops -fno-var-tracking-assignments")
+  set( CMAKE_CXX_FLAGS_RELEASE "-g -O3 -funroll-loops -fno-var-tracking-assignments")
   # optionally add sanitize flags
   #set( CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} ${GCC_SANITIZE_COMPILE_FLAGS}")
   #set( CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${GCC_SANITIZE_LINK_FLAGS}")
@@ -254,34 +256,33 @@ add_subdirectory(pugixml)
 # Summary of TPLs
 include(FeatureSummary)
 message(" ")
-feature_summary(WHAT ALL
+feature_summary( WHAT ALL
   INCLUDE_QUIET_PACKAGES
   FATAL_ON_MISSING_REQUIRED_PACKAGES
-  QUIET_ON_EMPTY)
+  QUIET_ON_EMPTY )
 
 # Summary of user-selectable build options
-message("\nBuild Summary:\n")
-message(STATUS "Machine name    : ${SITENAME}")
+message( "\nBuild Summary:\n")
+message( STATUS "Machine name    : ${SITENAME}")
 report_lanl_hpc_features()
-if(${BRANSON_N_GROUPS} GREATER 1)
-  message(STATUS "Energy groups   : ${BRANSON_N_GROUPS}")
+if( ${BRANSON_N_GROUPS} GREATER 1 )
+  message( STATUS "Energy groups   : ${BRANSON_N_GROUPS}")
 else()
-  message(STATUS "Energy groups   : Gray (1-group)")
+  message( STATUS "Energy groups   : Gray (1-group)")
 endif()
-message(STATUS "CMAKE_BUILD_TYPE: ${CMAKE_BUILD_TYPE}")
-message(STATUS "Compiler        : ${CMAKE_CXX_COMPILER}")
-string(REPLACE ";" " " CMAKE_BRANSON_CXXFLAGS_STR "${CMAKE_BRANSON_CXXFLAGS}")
-if(CMAKE_CONFIGURATION_TYPES)
-  message(STATUS "Compiler Flags (All)    : ${CMAKE_CXX_FLAGS} ${CMAKE_BRANSON_CXXFLAGS_STR}")
-  message(STATUS "Compiler Flags (Debug)  : ${CMAKE_CXX_FLAGS_DEBUG}")
-  message(STATUS "Compiler Flags (Release): ${CMAKE_CXX_FLAGS_RELEASE}")
+message( STATUS "CMAKE_BUILD_TYPE: ${CMAKE_BUILD_TYPE}")
+message( STATUS "Compiler        : ${CMAKE_CXX_COMPILER}")
+string( REPLACE ";" " " CMAKE_BRANSON_CXXFLAGS_STR "${CMAKE_BRANSON_CXXFLAGS}")
+if( CMAKE_CONFIGURATION_TYPES )
+  message( STATUS "Compiler Flags (All)    : ${CMAKE_CXX_FLAGS} ${CMAKE_BRANSON_CXXFLAGS_STR}")
+  message( STATUS "Compiler Flags (Debug)  : ${CMAKE_CXX_FLAGS_DEBUG}")
+  message( STATUS "Compiler Flags (Release): ${CMAKE_CXX_FLAGS_RELEASE}")
 else()
-  string(TOUPPER ${CMAKE_BUILD_TYPE} CMAKE_BUILD_TYPE_UPPER)
-  message(STATUS "Compiler Flags  : ${CMAKE_CXX_FLAGS} ${CMAKE_BRANSON_CXXFLAGS_STR} ${CMAKE_CXX_FLAGS_${CMAKE_BUILD_TYPE_UPPER}}")
+  string( TOUPPER ${CMAKE_BUILD_TYPE} CMAKE_BUILD_TYPE_UPPER )
+  message( STATUS "Compiler Flags  : ${CMAKE_CXX_FLAGS} ${CMAKE_BRANSON_CXXFLAGS_STR} ${CMAKE_CXX_FLAGS_${CMAKE_BUILD_TYPE_UPPER}}")
 endif()
 message("\n")
 
-<<<<<<< HEAD
 list(APPEND branson_deps pugixml)
 
 ##############################################################################
@@ -295,36 +296,6 @@ if(ENABLE_CALIPER)
     list(APPEND branson_deps
       caliper)
   endif()
-=======
-#------------------------------------------------------------------------------#
-# Set up libraries for Cray RMA routines
-
-# set(DMAPP_DYNAMIC -Wl,--whole-archive,-ldmapp,--no-whole-archive)
-
-
-#------------------------------------------------------------------------------#
-# Targets
-file(GLOB headers *.h)
-add_executable(BRANSON main.cc ${headers})
-target_include_directories( BRANSON PRIVATE
-  $<BUILD_INTERFACE:${PROJECT_BINARY_DIR}> ${PROJECT_SOURCE_DIR}/pugixml/src/ ${PROJECT_SOURCE_DIR}/random123/ )
-set( branson_deps
-  MPI::MPI_CXX
-  MPI::MPI_C
-  pugixml)
-
-if(OpenMP_FOUND)
-  set(branson_deps "OpenMP::OpenMP_CXX;${branson_deps}")
-endif()
-
-if(METIS_FOUND)
-  set( branson_deps "METIS::metis;${branson_deps}")
-endif()
-
-if( VIZ_LIBRARIES_FOUND )
-  set( branson_deps "Silo::silo;${HDF5_LIBRARIES};${branson_deps}" )
-endif()
->>>>>>> origin/develop
 
   message(STATUS "Looking for adiak...")
   find_package(adiak REQUIRED)
