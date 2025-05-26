@@ -279,8 +279,8 @@ void history_cpu_transport_photons(const uint32_t rank_cell_offset,
     std::vector<Photon> &photons, const std::vector<Cell> &cells, std::vector<Cell_Tally> &cell_tallies, int n_omp_threads) {
 
   auto cpu_cells_ptr{cells.data()};
-  const auto n_cells = cell_tallies.size();
 #ifdef USE_OPENMP
+  const auto n_cells = cell_tallies.size();
   // this is set earlier based on input variable
   std::vector<std::vector<Cell_Tally>> thread_tallies(n_omp_threads);
 #pragma omp parallel
@@ -312,8 +312,8 @@ void history_cpu_transport_photons(const uint32_t rank_cell_offset,
     PhotonArray &photons, const std::vector<Cell> &cells, std::vector<Cell_Tally> &cell_tallies, int n_omp_threads) {
 
   auto cpu_cells_ptr{cells.data()};
-  const auto n_cells = cell_tallies.size();
 #ifdef USE_OPENMP
+  const auto n_cells = cell_tallies.size();
   // this is set earlier based on input variable
   std::vector<std::vector<Cell_Tally>> thread_tallies(n_omp_threads);
 #pragma omp parallel
