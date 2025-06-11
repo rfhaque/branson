@@ -1,0 +1,162 @@
+//----------------------------------*-C++-*-----------------------------------//
+/*!
+ * \file   config.h.in
+ * \author Alex Long
+ * \date   July 25 2016
+ * \brief  Config file that CMake uses to generate config.h given available
+ *  libraries
+ * \note   Copyright (C) 2017 Los Alamos National Security, LLC.
+ *         All rights reserved
+ */
+//----------------------------------------------------------------------------//
+
+#ifndef config_h_
+#define config_h_
+
+#include <mpi.h>
+
+/* #undef VIZ_LIBRARIES_FOUND */
+/* #undef METIS_FOUND */
+/* #undef caliper_FOUND */
+/* #undef MOONLIGHT_NODE */
+/* #undef SNOW_NODE */
+/* #undef TRINITITE_NODE */
+/* #undef TRINITY_NODE */
+/* #undef CCS_NODE */
+
+#define USE_OPENMP
+
+// For faux multigroup array sizing
+#define BRANSON_N_GROUPS 1
+
+/* #undef ENABLE_VERBOSE_GPU_TRANSPORT */
+
+#ifdef USE_OPENMP
+#include <omp.h>
+#endif
+
+#ifdef caliper_FOUND
+#include <caliper/cali.h>
+#endif
+
+// since the main.cc as marked as a CUDA file in CUDA mode, this allows the tests to compile
+// without marking them as cuda files (CMake doesn't point to include paths for cuda if it's a
+// C++ main)
+#ifdef __NVCC__
+#define USE_CUDA ON
+#endif
+
+#ifdef __HIPCC__
+#define USE_HIP ON
+#endif
+
+/*------------------------------------------------------------------------------------------------*/
+/* HIP Support */
+#ifdef USE_HIP
+#include <hip/hip_runtime.h>
+#include <hip/hip_runtime_api.h>
+#define cudaDevAttrClockRate hipDeviceAttributeClockRate
+#define cudaDevAttrMaxRegistersPerBlock hipDeviceAttributeMaxRegistersPerBlock
+#define cudaDevAttrPciBusId hipDeviceAttributePciBusId
+#define cudaDevAttrTextureAlignment hipDeviceAttributeTextureAlignment
+#define cudaDevAttrTotalConstantMemory hipDeviceAttributeTotalConstantMemory
+#define cudaDeviceGetAttribute hipDeviceGetAttribute
+#define cudaDeviceProp hipDeviceProp_t
+#define cudaDeviceReset hipDeviceReset
+#define cudaDeviceSynchronize hipDeviceSynchronize
+#define cudaError_t hipError_t
+#define cudaFree hipFree
+#define cudaGetDevice hipGetDevice
+#define cudaGetDeviceCount hipGetDeviceCount
+#define cudaGetDeviceProperties hipGetDeviceProperties
+#define cudaGetErrorName hipGetErrorName
+#define cudaGetErrorString hipGetErrorString
+#define cudaGetLastError hipGetLastError
+#define cudaMalloc hipMalloc
+#define cudaMemcpy hipMemcpy
+#define cudaMemcpyDeviceToHost hipMemcpyDeviceToHost
+#define cudaMemcpyHostToDevice hipMemcpyHostToDevice
+#define cudaSetDevice hipSetDevice
+#define cudaSuccess hipSuccess
+#endif // USE_HIP
+
+#ifdef USE_CUDA
+#include <cuda.h>
+#include <cuda_runtime.h>
+#include <thrust/device_vector.h>
+#include <thrust/execution_policy.h>
+#include <thrust/sort.h>
+#endif // USE_CUDA
+
+/*----------------------------------------------------------------------------*/
+/* Mark functions for compilation on host and device */
+#if defined(USE_HIP) or defined(USE_CUDA)
+#define HOST_AND_DEVICE_FUNCTION __host__ __device__
+#define GPU_HOST_DEVICE __host__ __device__
+#define GPU_DEVICE __device__
+#define GPU_KERNEL __global__
+#define CONSTANT __constant__
+
+//! Add addend to t, use atomicAdd if built on a CUDA device
+template <class T>
+GPU_HOST_DEVICE inline void accumulate(T &target, T const addend) {
+  #if defined( __HIP_DEVICE_COMPILE__) or defined(USE_CUDA)
+  atomicAdd(&target, addend);
+  #endif
+  return;
+}
+#else
+
+#define HOST_AND_DEVICE_FUNCTION
+#define GPU_HOST_DEVICE
+#define GPU_DEVICE
+#define GPU_KERNEL
+#define CONSTANT constexpr
+
+//! Add addend to t, non-atomic version
+template <class T> inline void accumulate(T &target, T const addend) {
+  target += addend;
+  return;
+}
+#endif // USE_HIP or USE_CUDA
+
+inline void Insist(const bool pass, const std::string &message) {
+  if (!pass) {
+    std::cout<<"Insist at "<< __FILE__ <<" "<<__LINE__<<" fails with: "<<message<<std::endl;
+    MPI_Abort(MPI_COMM_WORLD, 1);
+  }
+}
+
+#ifdef caliper_FOUND
+
+
+void wrapped_cali_mark_begin(const char *timer_name) {
+    CALI_MARK_BEGIN(timer_name);
+}
+void wrapped_cali_mark_end(const char *timer_name) {
+    CALI_MARK_END(timer_name);
+}
+
+#else
+void wrapped_cali_mark_begin(const char *timer_name) {
+  int rank;
+  MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+  if (rank == 0) {
+    std::cout<<"Branson built without caliper, not starting timer: "<<timer_name<<std::endl;
+  }
+}
+void wrapped_cali_mark_end(const char *timer_name) {
+  int rank;
+  MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+  if (rank == 0) {
+    std::cout<<"Branson built without caliper, not ending timer: "<<timer_name<<std::endl;
+  }
+}
+
+#endif
+
+
+#endif // def config_h_
+//----------------------------------------------------------------------------//
+// end of config.h
+//----------------------------------------------------------------------------//

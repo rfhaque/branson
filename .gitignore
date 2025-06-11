@@ -6,3 +6,6 @@ GPATH
 GTAGS
 GRTAGS
 .nfs*
+.vscode/
+build/
+test/
