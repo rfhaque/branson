@@ -142,6 +142,7 @@ struct EmissionGroupData {
   double total_probability;
 };
 
+GPU_HOST_DEVICE
 inline EmissionGroupData precompute_emission_group_data(const Cell &cell_data) {
   EmissionGroupData data;
   data.cumulative_probs.resize(BRANSON_N_GROUPS);
@@ -155,6 +156,7 @@ inline EmissionGroupData precompute_emission_group_data(const Cell &cell_data) {
   return data;
 }
 
+GPU_HOST_DEVICE
 inline int sample_emission_group(RNG &rng, const EmissionGroupData &data) {
   constexpr int binarySearchThreshold = 10000;
   double cdf_value = rng.generate_random_number() * data.total_probability;

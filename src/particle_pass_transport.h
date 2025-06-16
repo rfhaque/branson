@@ -45,7 +45,7 @@ Census_T  particle_pass_transport(
   using std::vector;
 
   // is the GPU even available?
-  #ifdef USE_GPU
+  #ifdef USE_CUDA
   constexpr bool gpu_available = true;
   #else
   constexpr bool gpu_available = false;
@@ -68,7 +68,7 @@ Census_T  particle_pass_transport(
   t_transport.start_timer("timestep_transport");
 
   // Number of particles to run between MPI communication
-  //const uint32_t batch_size = imc_parameters.get_batch_size();
+  const uint32_t batch_size = imc_parameters.get_batch_size();
 
   // Preferred size of MPI message
   const uint32_t max_buffer_size = imc_parameters.get_particle_message_size();
@@ -219,7 +219,9 @@ Census_T  particle_pass_transport(
 
     if(!phtn_recv_list.empty()) {
       if(gpu_setup.use_gpu_transporter() && gpu_available)
-        gpu_transport_photons(rank_cell_offset, phtn_recv_list, gpu_setup.get_device_cells_ptr(), cell_tallies);
+        // gpu_transport_photons(rank_cell_offset, phtn_recv_list, gpu_setup.get_device_cells_ptr(), cell_tallies);
+        history_cpu_transport_photons(rank_cell_offset, phtn_recv_list, mesh.get_cells(), cell_tallies, n_omp_threads);
+
       else {
         history_cpu_transport_photons(rank_cell_offset, phtn_recv_list, mesh.get_cells(), cell_tallies, n_omp_threads);
       }
@@ -227,12 +229,6 @@ Census_T  particle_pass_transport(
       for (auto &phtn : phtn_recv_list) {
         switch (phtn.get_descriptor()) {
         // this case should never be reached
-        case Constants::SCATTER:
-          std::cout<<"ERROR: Should not end transport with SCATTER event"<<std::endl;
-          break;
-        case Constants::BOUND:
-          std::cout<<"ERROR: Should not end transport with BOUND event"<<std::endl;
-          break;
         case Constants::KILLED:
           n_complete++;
           break;

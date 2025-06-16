@@ -31,17 +31,11 @@ uint64_t post_process_photons(const double next_dt, Census_T &all_photons, Censu
 
 template <>
 uint64_t post_process_photons<std::vector<Photon>>(const double next_dt, std::vector<Photon> &all_photons, std::vector<Photon> &census_list, double &census_E, double &exit_E) {
-
+ 
   uint64_t n_complete = 0;
   for (auto &phtn : all_photons) {
     auto descriptor{phtn.get_descriptor()};
     switch (descriptor) {
-    case Constants::event_type::SCATTER:
-      std::cout<<"THIS IS BAD, should not end transport with SCATTER"<<std::endl;
-      break;
-    case Constants::event_type::BOUND:
-      std::cout<<"THIS IS BAD, should not end transport with BOUND"<<std::endl;
-      break;
     case Constants::event_type::PASS:
       // handle in other function
       break;
@@ -93,9 +87,9 @@ uint64_t post_process_photons<PhotonArray>(const double next_dt, PhotonArray &al
 
   // append census photons on to census list
   auto old_census_size = census_list.size();
-  auto new_census_size = old_census_size + census_count;
+  auto new_census_size = old_census_size + census_count; 
   census_list.resize(new_census_size);
-  auto census_index = old_census_size;
+  auto census_index = old_census_size; 
   for ( size_t i = 0; i < all_photons.cell_ID.size(); ++i) {
     if (static_cast<Constants::event_type>(all_photons.descriptors[i]) == Constants::event_type::CENSUS){
       census_list.cell_ID[census_index] = all_photons.cell_ID[i];

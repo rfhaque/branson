@@ -22,6 +22,7 @@
 #include "imc_parameters.h"
 #include "imc_state.h"
 #include "photon.h"
+#include "photon_array.h" // Include PhotonArray
 #include "mesh.h"
 #include "message_counter.h"
 #include "mpi_types.h"
