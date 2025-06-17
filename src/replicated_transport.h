@@ -211,9 +211,7 @@ Census_T replicated_transport(
 
           // Post process photons for this batch, account for escaped energy and add particles to census
           post_process_photons(next_dt, batch_photons, census_list, census_E, exit_E);
-          // Note: Modifications in batch_photons are not reflected back into all_photons here.
-          // The original CPU event code modified the main array directly.
-          // For consistency with GPU/History post-processing, we process batches and collect census/exit.
+         
         }
       }
       else if constexpr (std::is_same_v<Census_T, PhotonArray>) {
@@ -255,9 +253,6 @@ Census_T replicated_transport(
   // wait for all ranks to finish
   MPI_Barrier(MPI_COMM_WORLD);
 
-  // Sorting census list might be needed depending on subsequent operations
-  // std::sort(census_list.begin(), census_list.end()); // If using std::vector<Photon>
-  // Sorting PhotonArray census_list would require a custom sort or sorting based on one member vector.
 
   // set diagnostic quantities
   imc_state.set_exit_E(exit_E);

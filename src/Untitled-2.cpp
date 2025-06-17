@@ -808,6 +808,9 @@ void cpu_event_transport_photons(const uint32_t rank_cell_offset, std::vector<Ph
 //----------------------------------------------------------------------------//
 #ifdef USE_CUDA
 
+//----------------------------------------------------------------------------//
+// Helper Kernels                                                             //
+//----------------------------------------------------------------------------//
 
 // Kernel to reset atomic counters
 __global__ void reset_atomic_counters_kernel(unsigned int* counters, int num_counters) {
@@ -817,7 +820,6 @@ __global__ void reset_atomic_counters_kernel(unsigned int* counters, int num_cou
     }
 }
 
-
 //----------------------------------------------------------------------------//
 // AoS GPU Event Kernels                                                      //
 //----------------------------------------------------------------------------//
@@ -826,16 +828,16 @@ __global__ void calculate_events_kernel_aos(
     const uint32_t rank_cell_offset,
     Photon* all_photons,
     const Cell* cells,
-    const uint32_t* active_indices, 
+    const uint32_t* active_indices, // Indices of active photons
     uint32_t active_count,
-    GPUEventType* event_types,      // Event type for each active photon
-    double* event_distances)        // Event distance for each active photon
+    GPUEventType* event_types,      // Output: Event type for each active photon
+    double* event_distances)        // Output: Event distance for each active photon
 {
     uint32_t active_idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (active_idx >= active_count) return;
 
-    uint32_t photon_idx = active_indices[active_idx]; 
-    Photon& phtn = all_photons[photon_idx]; 
+    uint32_t photon_idx = active_indices[active_idx]; // Get the original photon index
+    Photon& phtn = all_photons[photon_idx]; // Use reference
     RNG& rng = phtn.get_rng();
 
     uint32_t local_cell_index = phtn.get_cell() - rank_cell_offset;
@@ -875,7 +877,7 @@ __global__ void update_state_tally_and_classify_kernel_aos(
     const double* event_distances,
     GPUEventType* event_types_out,      // Final event type 
     unsigned int* event_counters,       // Atomic counters for scatter, boundary, census, kill
-    uint32_t* event_queue_positions)    //  position in the specific event queue
+    uint32_t* event_queue_positions)    // Output: position in the specific event queue
 {
     uint32_t active_idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (active_idx >= active_count) return;
@@ -905,14 +907,14 @@ __global__ void update_state_tally_and_classify_kernel_aos(
     if (phtn.below_cutoff(Constants::cutoff_fraction)) {
         atomicAdd(&cell_tallies[local_cell_index].abs_E, phtn.get_E()); // Tally remaining E
         phtn.set_E(0.0); // Zero out energy
-        event_type = GPU_KILLED; 
+        event_type = GPU_KILLED; // Override event type
         phtn.set_descriptor(Constants::KILLED); // Set final descriptor
     }
 
     // Store final event type for partitioning
     event_types_out[active_idx] = event_type;
 
-    //  increment the counter for the determined event type and get queue position
+    // Atomically increment the counter for the determined event type and get queue position
     // Map GPUEventType enum to counter index (e.g., SCATTER=0, BOUNDARY=1, CENSUS=2, KILLED=3)
     unsigned int queue_idx = 0; // Default or invalid
     switch(event_type) {
@@ -922,7 +924,7 @@ __global__ void update_state_tally_and_classify_kernel_aos(
         case GPU_KILLED:   queue_idx = 3; break;
         default: break; // Should not happen for these types
     }
-    //  increment the counter and store the previous value
+    // Atomically increment the counter and store the previous value (which is the index)
     event_queue_positions[active_idx] = atomicAdd(&event_counters[queue_idx], 1);
 }
 
@@ -931,10 +933,10 @@ __global__ void partition_photons_kernel_aos(
     uint32_t active_count,
     const GPUEventType* final_event_types,// Final event type for each active photon
     const uint32_t* event_queue_positions,// Position within the event queue
-    uint32_t* scatter_indices,            // Original indices of scatter photons
-    uint32_t* boundary_indices,           // Original indices of boundary photons
-    uint32_t* census_indices,             // Original indices of census photons
-    uint32_t* killed_indices)             // Original indices of killed photons
+    uint32_t* scatter_indices,            // Output: Original indices of scatter photons
+    uint32_t* boundary_indices,           // Output: Original indices of boundary photons
+    uint32_t* census_indices,             // Output: Original indices of census photons
+    uint32_t* killed_indices)             // Output: Original indices of killed photons
 {
     uint32_t active_idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (active_idx >= active_count) return;
@@ -943,7 +945,7 @@ __global__ void partition_photons_kernel_aos(
     GPUEventType event_type = final_event_types[active_idx];
     uint32_t queue_pos = event_queue_positions[active_idx];
 
-    // Write the original photon index into the correct event list 
+    // Write the original photon index into the correct event list at the calculated position
     switch(event_type) {
         case GPU_SCATTER:  scatter_indices[queue_pos] = photon_idx; break;
         case GPU_BOUNDARY: boundary_indices[queue_pos] = photon_idx; break;
@@ -1041,7 +1043,7 @@ __global__ void process_killed_kernel_aos(
     if (killed_idx >= killed_count) return;
 
     uint32_t photon_idx = killed_indices[killed_idx];
-    // Descriptor already set to killed in update_state kernel
+    // Descriptor already set to KILLED in update_state kernel
     // Final energy already tallied in update_state kernel
 }
 
@@ -1072,29 +1074,22 @@ __global__ void compact_active_list_kernel_aos(
 // SoA GPU Event Kernels                                                      //
 //----------------------------------------------------------------------------//
 
-
-
-__global__ void process_transport_step_kernel_soa(
+__global__ void calculate_events_kernel_soa(
     const uint32_t rank_cell_offset,
-    uint32_t* cell_ID, uint32_t* group, unsigned char* descriptors,
-    std::array<double, 3>* pos, std::array<double, 3>* angle,
-    double* E, const double* E0, double* life_dx, RNG* rng_array,
+    const uint32_t* cell_ID, const uint32_t* group,
+    const std::array<double, 3>* pos, const std::array<double, 3>* angle,
+    const double* life_dx, RNG* rng_array,
     const Cell* cells,
-    Cell_Tally* cell_tallies,
-    const uint32_t* active_indices,
+    const uint32_t* active_indices, 
     uint32_t active_count,
-    GPUEventType* final_event_types,
-    unsigned int* event_counters,
-    uint32_t* event_queue_positions
-)
-  {
+    GPUEventType* event_types,      // Output: Event type for each active photon
+    double* event_distances)        // Output: Event distance for each active photon
+{
     uint32_t active_idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (active_idx >= active_count) return;
 
     uint32_t photon_idx = active_indices[active_idx]; 
     RNG& rng = rng_array[photon_idx];
-
-    // --- 1. calculate Event Distances
 
     uint32_t local_cell_index = cell_ID[photon_idx] - rank_cell_offset;
     const Cell* cell = &cells[local_cell_index];
@@ -1112,19 +1107,41 @@ __global__ void process_transport_step_kernel_soa(
         pos[photon_idx], angle[photon_idx], surface_cross);
     const double dist_to_census = life_dx[photon_idx];
 
-    double distance = dist_to_scatter;
-    GPUEventType event_type = GPU_SCATTER;
-    
-    if (dist_to_boundary < distance) {
-      distance = dist_to_boundary;
-      event_type = GPU_BOUNDARY;
-    }
-    if (dist_to_census < distance) {
-      distance = dist_to_census;
-      event_type = GPU_CENSUS;
-    }
+    const double dist = min(dist_to_scatter, min(dist_to_boundary, dist_to_census));
+    event_distances[active_idx] = dist;
 
-    // --- 2. Update state tally
+    if (dist == dist_to_scatter)       event_types[active_idx] = GPU_SCATTER;
+    else if (dist == dist_to_boundary) event_types[active_idx] = GPU_BOUNDARY;
+    else                               event_types[active_idx] = GPU_CENSUS;
+}
+
+
+__global__ void update_state_tally_and_classify_kernel_soa(
+    const uint32_t rank_cell_offset,
+    uint32_t* cell_ID, uint32_t* group, unsigned char* descriptors,
+    std::array<double, 3>* pos, std::array<double, 3>* angle,
+    double* E, const double* E0, double* life_dx,
+    const Cell* cells,
+    Cell_Tally* cell_tallies,
+    const uint32_t* active_indices,
+    uint32_t active_count,
+    const GPUEventType* event_types_in,
+    const double* event_distances,
+    GPUEventType* event_types_out,
+    unsigned int* event_counters,
+    uint32_t* event_queue_positions)
+{
+    uint32_t active_idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (active_idx >= active_count) return;
+
+    uint32_t photon_idx = active_indices[active_idx];
+    double distance = event_distances[active_idx];
+    GPUEventType event_type = event_types_in[active_idx];
+
+    uint32_t local_cell_index = cell_ID[photon_idx] - rank_cell_offset;
+    const Cell* cell = &cells[local_cell_index];
+    const double sigma_a = cell->get_op_a(group[photon_idx]);
+    const double f = cell->get_f();
 
     const double current_E = E[photon_idx];
     const double absorbed_E = current_E * (1.0 - exp(-sigma_a * f * distance));
@@ -1140,16 +1157,17 @@ __global__ void process_transport_step_kernel_soa(
     pos[photon_idx][1] += angle[photon_idx][1] * distance;
     pos[photon_idx][2] += angle[photon_idx][2] * distance;
     life_dx[photon_idx] -= distance;
-    
-    // Check energy cutoff
+
+    // Check for energy kill 
     if (next_E / E0[photon_idx] < Constants::cutoff_fraction) {
         atomicAdd(&cell_tallies[local_cell_index].abs_E, next_E); // Tally remaining E
-        E[photon_idx] = 0.0; 
-        event_type = GPU_KILLED; 
+        E[photon_idx] = 0.0; // Zero out energy
+        event_type = GPU_KILLED; // Override event type
         descriptors[photon_idx] = static_cast<unsigned char>(Constants::KILLED); // Set final descriptor
     }
 
-    final_event_types[active_idx] = event_type;
+    // Store final event type for partitioning
+    event_types_out[active_idx] = event_type;
 
     //  increment the counter for the determined event type and get queue position
     unsigned int queue_idx = 0;
@@ -1161,17 +1179,17 @@ __global__ void process_transport_step_kernel_soa(
         default: break;
     }
     event_queue_positions[active_idx] = atomicAdd(&event_counters[queue_idx], 1);
-  }
+}
 
 __global__ void partition_photons_kernel_soa(
     const uint32_t* active_indices,       
     uint32_t active_count,
-    const GPUEventType* final_event_types,
+    const GPUEventType* final_event_types,// Final event type for each active photon
     const uint32_t* event_queue_positions,// Position within the event queue
-    uint32_t* scatter_indices,            // Original indices of scatter photons
-    uint32_t* boundary_indices,           // Original indices of boundary photons
-    uint32_t* census_indices,             // Original indices of census photons
-    uint32_t* killed_indices)             // Original indices of killed photons
+    uint32_t* scatter_indices,            // Output: Original indices of scatter photons
+    uint32_t* boundary_indices,           // Output: Original indices of boundary photons
+    uint32_t* census_indices,             // Output: Original indices of census photons
+    uint32_t* killed_indices)             // Output: Original indices of killed photons
 {
     uint32_t active_idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (active_idx >= active_count) return;
@@ -1189,16 +1207,16 @@ __global__ void partition_photons_kernel_soa(
     }
 }
 
+
 __global__ void process_scatter_kernel_soa(
     uint32_t* group, unsigned char* descriptors, std::array<double, 3>* angle, RNG* rng_array,
     const uint32_t* cell_ID, 
     const Cell* cells,
     const EmissionGroupData* emission_groups,
     const uint32_t* scatter_indices, 
-    const unsigned int* event_counters,
+    uint32_t scatter_count,
     const uint32_t rank_cell_offset)
 {
-    uint32_t scatter_count = event_counters[0];
     uint32_t scatter_idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (scatter_idx >= scatter_count) return;
 
@@ -1221,16 +1239,14 @@ __global__ void process_scatter_kernel_soa(
     descriptors[photon_idx] = static_cast<unsigned char>(Constants::SCATTER); // Update descriptor array
 }
 
-
 __global__ void process_boundary_kernel_soa(
     uint32_t* cell_ID, unsigned char* descriptors, std::array<double, 3>* angle,
     const std::array<double, 3>* pos, 
     const Cell* cells,
     const uint32_t* boundary_indices, 
-    const unsigned int* event_counters,
+    uint32_t boundary_count,
     const uint32_t rank_cell_offset)
 {
-    uint32_t boundary_count = event_counters[1];
     uint32_t boundary_idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (boundary_idx >= boundary_count) return;
 
@@ -1263,9 +1279,8 @@ __global__ void process_boundary_kernel_soa(
 __global__ void process_census_kernel_soa(
     unsigned char* descriptors, 
     const uint32_t* census_indices, 
-    const unsigned int* event_counters)
+    uint32_t census_count)
 {
-    uint32_t census_count = event_counters[2];
     uint32_t census_idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (census_idx >= census_count) return;
 
@@ -1275,12 +1290,12 @@ __global__ void process_census_kernel_soa(
 
 __global__ void process_killed_kernel_soa(
     const uint32_t* killed_indices, 
-    const unsigned int* event_counters)
+    uint32_t killed_count)
 {
-    uint32_t killed_count = event_counters[3];
     uint32_t killed_idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (killed_idx >= killed_count) return;
 }
+
 
 __global__ void compact_active_list_kernel_soa(
     const unsigned char* descriptors,      
@@ -1302,200 +1317,6 @@ __global__ void compact_active_list_kernel_soa(
         next_active_indices[write_pos] = photon_idx;
     }
 }
-
-//----------------------------------------------------------------------------//
-// GPU Transport Function (SoA) - Event Based                                 //
-//----------------------------------------------------------------------------//
-void gpu_event_transport_photons(const uint32_t rank_cell_offset,
-    PhotonArray &cpu_photons, const Cell *device_cells_ptr,
-    std::vector<Cell_Tally> &cpu_cell_tallies,
-    const std::vector<EmissionGroupData>& emission_groups) // Pass host emission data
-{
-  uint32_t n_photons = static_cast<uint32_t>(cpu_photons.size());
-   if (n_photons == 0) return;
-
-  size_t n_cells = cpu_cell_tallies.size();
-  size_t n_emission_groups = emission_groups.size();
-   if (n_cells != n_emission_groups) {
-      std::cerr << "Error: Mismatch between cell tally count and emission group count." << std::endl;
-      return;
-  }
-
-  cudaError_t err;
-
-  // --- Allocate GPU Memory ---
-  // SoA Photon Data Arrays
-  uint32_t* d_cell_ID; uint32_t* d_group; uint32_t* d_source_type;
-  unsigned char* d_descriptors; std::array<double, 3>* d_pos; std::array<double, 3>* d_angle;
-  double* d_E; double* d_E0; double* d_life_dx; RNG* d_rng;
-  Cell_Tally* d_cell_tallies; EmissionGroupData* d_emission_groups;
-  uint32_t *d_active_indices_1, *d_active_indices_2;
-  GPUEventType *d_final_event_types;
-  double *d_event_distances; unsigned int *d_event_counters;
-  uint32_t *d_event_queue_positions;
-  uint32_t *d_scatter_indices, *d_boundary_indices, *d_census_indices, *d_killed_indices;
-  unsigned int *d_next_active_count_atomic;
-
-  // Malloc SoA arrays
-  err = cudaMalloc((void**)&d_cell_ID, n_photons * sizeof(uint32_t)); Insist(!err, "SoA GPU malloc failed: cell_ID");
-  err = cudaMalloc((void**)&d_group, n_photons * sizeof(uint32_t)); Insist(!err, "SoA GPU malloc failed: group");
-  err = cudaMalloc((void**)&d_source_type, n_photons * sizeof(uint32_t)); Insist(!err, "SoA GPU malloc failed: source_type");
-  err = cudaMalloc((void**)&d_descriptors, n_photons * sizeof(unsigned char)); Insist(!err, "SoA GPU malloc failed: descriptors");
-  err = cudaMalloc((void**)&d_pos, n_photons * sizeof(std::array<double, 3>)); Insist(!err, "SoA GPU malloc failed: pos");
-  err = cudaMalloc((void**)&d_angle, n_photons * sizeof(std::array<double, 3>)); Insist(!err, "SoA GPU malloc failed: angle");
-  err = cudaMalloc((void**)&d_E, n_photons * sizeof(double)); Insist(!err, "SoA GPU malloc failed: E");
-  err = cudaMalloc((void**)&d_E0, n_photons * sizeof(double)); Insist(!err, "SoA GPU malloc failed: E0");
-  err = cudaMalloc((void**)&d_life_dx, n_photons * sizeof(double)); Insist(!err, "SoA GPU malloc failed: life_dx");
-  err = cudaMalloc((void**)&d_rng, n_photons * sizeof(RNG)); Insist(!err, "SoA GPU malloc failed: rng");
-
-  // Malloc other data
-  err = cudaMalloc((void**)&d_cell_tallies, n_cells * sizeof(Cell_Tally)); Insist(!err, "SoA GPU malloc failed: cell_tallies");
-  err = cudaMalloc((void**)&d_emission_groups, n_emission_groups * sizeof(EmissionGroupData)); Insist(!err, "SoA GPU malloc failed: emission_groups");
-
-  // Malloc event processing data 
-  err = cudaMalloc((void **)&d_active_indices_1, sizeof(uint32_t) * n_photons); Insist(!err, "GPU SoA Malloc: d_active_indices_1");
-  err = cudaMalloc((void **)&d_active_indices_2, sizeof(uint32_t) * n_photons); Insist(!err, "GPU SoA Malloc: d_active_indices_2");
-  err = cudaMalloc((void **)&d_final_event_types, sizeof(GPUEventType) * n_photons); Insist(!err, "GPU SoA Malloc: d_event_types_1");
-  err = cudaMalloc((void **)&d_event_distances, sizeof(double) * n_photons); Insist(!err, "GPU SoA Malloc: d_event_distances");
-  err = cudaMalloc((void **)&d_event_queue_positions, sizeof(uint32_t) * n_photons); Insist(!err, "GPU SoA Malloc: d_event_queue_positions");
-  const int NUM_EVENT_TYPES = 4;
-  err = cudaMalloc((void **)&d_event_counters, sizeof(unsigned int) * NUM_EVENT_TYPES); Insist(!err, "GPU SoA Malloc: d_event_counters");
-  err = cudaMalloc((void **)&d_next_active_count_atomic, sizeof(unsigned int)); Insist(!err, "GPU SoA Malloc: d_next_active_count_atomic");
-  err = cudaMalloc((void **)&d_scatter_indices, sizeof(uint32_t) * n_photons); Insist(!err, "GPU SoA Malloc: d_scatter_indices");
-  err = cudaMalloc((void **)&d_boundary_indices, sizeof(uint32_t) * n_photons); Insist(!err, "GPU SoA Malloc: d_boundary_indices");
-  err = cudaMalloc((void **)&d_census_indices, sizeof(uint32_t) * n_photons); Insist(!err, "GPU SoA Malloc: d_census_indices");
-  err = cudaMalloc((void **)&d_killed_indices, sizeof(uint32_t) * n_photons); Insist(!err, "GPU SoA Malloc: d_killed_indices");
-
-  // --- Copy Initial Data H2D ---
-  // Copy SoA arrays
-  err = cudaMemcpy(d_cell_ID, cpu_photons.cell_ID.data(), n_photons * sizeof(uint32_t), cudaMemcpyHostToDevice); Insist(!err, "SoA GPU copy failed: cell_ID");
-  err = cudaMemcpy(d_group, cpu_photons.group.data(), n_photons * sizeof(uint32_t), cudaMemcpyHostToDevice); Insist(!err, "SoA GPU copy failed: group");
-  err = cudaMemcpy(d_source_type, cpu_photons.source_type.data(), n_photons * sizeof(uint32_t), cudaMemcpyHostToDevice); Insist(!err, "SoA GPU copy failed: source_type");
-  err = cudaMemcpy(d_descriptors, cpu_photons.descriptors.data(), n_photons * sizeof(unsigned char), cudaMemcpyHostToDevice); Insist(!err, "SoA GPU copy failed: descriptors");
-  err = cudaMemcpy(d_pos, cpu_photons.pos.data(), n_photons * sizeof(std::array<double, 3>), cudaMemcpyHostToDevice); Insist(!err, "SoA GPU copy failed: pos");
-  err = cudaMemcpy(d_angle, cpu_photons.angle.data(), n_photons * sizeof(std::array<double, 3>), cudaMemcpyHostToDevice); Insist(!err, "SoA GPU copy failed: angle");
-  err = cudaMemcpy(d_E, cpu_photons.E.data(), n_photons * sizeof(double), cudaMemcpyHostToDevice); Insist(!err, "SoA GPU copy failed: E");
-  err = cudaMemcpy(d_E0, cpu_photons.E0.data(), n_photons * sizeof(double), cudaMemcpyHostToDevice); Insist(!err, "SoA GPU copy failed: E0");
-  err = cudaMemcpy(d_life_dx, cpu_photons.life_dx.data(), n_photons * sizeof(double), cudaMemcpyHostToDevice); Insist(!err, "SoA GPU copy failed: life_dx");
-  err = cudaMemcpy(d_rng, cpu_photons.rng.data(), n_photons * sizeof(RNG), cudaMemcpyHostToDevice); Insist(!err, "SoA GPU copy failed: rng");
-  err = cudaMemcpy(d_cell_tallies, cpu_cell_tallies.data(), n_cells * sizeof(Cell_Tally), cudaMemcpyHostToDevice); Insist(!err, "SoA GPU copy failed: cell_tallies");
-  err = cudaMemcpy(d_emission_groups, emission_groups.data(), n_emission_groups * sizeof(EmissionGroupData), cudaMemcpyHostToDevice); Insist(!err, "SoA GPU copy failed: emission_groups");
-  std::vector<uint32_t> h_initial_indices(n_photons);
-  std::iota(h_initial_indices.begin(), h_initial_indices.end(), 0);
-  err = cudaMemcpy(d_active_indices_1, h_initial_indices.data(), sizeof(uint32_t) * n_photons, cudaMemcpyHostToDevice); Insist(!err, "GPU SoA Memcpy H2D: d_active_indices_1");
-  std::vector<unsigned int> h_zero_counters(NUM_EVENT_TYPES, 0);
-  err = cudaMemcpy(d_event_counters, h_zero_counters.data(), sizeof(unsigned int) * NUM_EVENT_TYPES, cudaMemcpyHostToDevice); Insist(!err, "GPU SoA Memcpy H2D: d_event_counters");
-
-
-  // --- Event Loop ---
-  uint32_t current_active_count = n_photons;
-  uint32_t* d_current_active_indices = d_active_indices_1;
-  uint32_t* d_next_active_indices = d_active_indices_2;
-  // GPUEventType* d_current_event_types = d_final_event_types;
-
-  int n_threads = Constants::n_threads_per_block;
-
-  while (current_active_count > 0) {
-    int n_blocks = (current_active_count + n_threads - 1) / n_threads;
-
-    // 1. Reset event counters
-    reset_atomic_counters_kernel<<<(NUM_EVENT_TYPES + n_threads -1)/n_threads, n_threads>>>(d_event_counters, NUM_EVENT_TYPES);
-    // err = cudaGetLastError(); Insist(!err, "GPU SoA Kernel Launch Error: reset_atomic_counters");
-
-    // 2. Calculate distances and initial event types, update state, tally, check kills, classify, and get queue positions
-    process_transport_step_kernel_soa<<<n_blocks, n_threads>>>(
-        rank_cell_offset,
-        d_cell_ID, d_group, d_descriptors, d_pos, d_angle, d_E, d_E0, d_life_dx, // Photon data
-        d_rng, device_cells_ptr, d_cell_tallies, 
-        d_current_active_indices, current_active_count,
-        d_final_event_types,
-        d_event_counters, d_event_queue_positions); 
-    // err = cudaGetLastError(); Insist(!err, "GPU SoA Kernel Launch Error: update_state_tally_classify");
-
-    // 3. Place original indices into event-specific lists
-    partition_photons_kernel_soa<<<n_blocks, n_threads>>>( 
-        d_current_active_indices, current_active_count,
-        d_final_event_types, d_event_queue_positions,
-        d_scatter_indices, d_boundary_indices, d_census_indices, d_killed_indices);
-    // err = cudaGetLastError(); Insist(!err, "GPU SoA Kernel Launch Error: partition_photons");
-    
-    // 4. Launch kernels, process events
-    int max_blocks = (n_photons + n_threads - 1) / n_threads;
-    // if (scatter_count > 0) {
-    //     int scatter_blocks = (scatter_count + n_threads - 1) / n_threads;
-    process_scatter_kernel_soa<<<max_blocks, n_threads>>>(
-        d_group, d_descriptors, d_angle, d_rng, d_cell_ID, // Photon data
-        device_cells_ptr, d_emission_groups, // Other data
-        d_scatter_indices, d_event_counters, rank_cell_offset);
-    // err = cudaGetLastError(); Insist(!err, "GPU SoA Kernel Launch Error: process_scatter");
-    // }
-    // if (boundary_count > 0) {
-    //     int boundary_blocks = (boundary_count + n_threads - 1) / n_threads;
-    process_boundary_kernel_soa<<<max_blocks, n_threads>>>(
-        d_cell_ID, d_descriptors, d_angle, d_pos, // Photon data
-        device_cells_ptr, // Other data
-        d_boundary_indices, d_event_counters, rank_cell_offset);
-    // err = cudaGetLastError(); Insist(!err, "GPU SoA Kernel Launch Error: process_boundary");
-    // }
-    // if (census_count > 0) {
-    //     int census_blocks = (census_count + n_threads - 1) / n_threads;
-    process_census_kernel_soa<<<max_blocks, n_threads>>>(
-        d_descriptors, d_census_indices, d_event_counters);
-    // err = cudaGetLastError(); Insist(!err, "GPU SoA Kernel Launch Error: process_census");
-    // }
-    // if (killed_count > 0) {
-    //     int killed_blocks = (killed_count + n_threads - 1) / n_threads;
-    process_killed_kernel_soa<<<max_blocks, n_threads>>>(
-        d_killed_indices, d_event_counters);
-    // err = cudaGetLastError(); Insist(!err, "GPU SoA Kernel Launch Error: process_killed");
-    // }
-
-    // 5. Compact active list for next iteration
-    err = cudaMemset(d_next_active_count_atomic, 0, sizeof(unsigned int)); Insist(!err, "GPU SoA Memset Error: d_next_active_count_atomic");
-    compact_active_list_kernel_soa<<<n_blocks, n_threads>>>( 
-        d_descriptors, d_current_active_indices, current_active_count,
-        d_next_active_indices, d_next_active_count_atomic);
-    // err = cudaGetLastError(); Insist(!err, "GPU SoA Kernel Launch Error: compact_active_list");
-
-    // Get the new active count
-    unsigned int h_next_active_count = 0;
-    err = cudaMemcpy(&h_next_active_count, d_next_active_count_atomic, sizeof(unsigned int), cudaMemcpyDeviceToHost);
-    // Insist(!err, "GPU SoA Memcpy D2H Error: d_next_active_count_atomic");
-    current_active_count = h_next_active_count;
-
-    // Swap active list pointers
-    std::swap(d_current_active_indices, d_next_active_indices);
-
-  } // End while(current_active_count > 0)
-
-  cudaDeviceSynchronize();
-
-  // --- Copy Results Back ---
-  err = cudaMemcpy(cpu_photons.cell_ID.data(), d_cell_ID, n_photons * sizeof(uint32_t), cudaMemcpyDeviceToHost); Insist(!err, "SoA GPU copy back failed: cell_ID");
-  err = cudaMemcpy(cpu_photons.group.data(), d_group, n_photons * sizeof(uint32_t), cudaMemcpyDeviceToHost); Insist(!err, "SoA GPU copy back failed: group");
-  err = cudaMemcpy(cpu_photons.source_type.data(), d_source_type, n_photons * sizeof(uint32_t), cudaMemcpyDeviceToHost); Insist(!err, "SoA GPU copy back failed: source_type");
-  err = cudaMemcpy(cpu_photons.descriptors.data(), d_descriptors, n_photons * sizeof(unsigned char), cudaMemcpyDeviceToHost); Insist(!err, "SoA GPU copy back failed: descriptors");
-  err = cudaMemcpy(cpu_photons.pos.data(), d_pos, n_photons * sizeof(std::array<double, 3>), cudaMemcpyDeviceToHost); Insist(!err, "SoA GPU copy back failed: pos");
-  err = cudaMemcpy(cpu_photons.angle.data(), d_angle, n_photons * sizeof(std::array<double, 3>), cudaMemcpyDeviceToHost); Insist(!err, "SoA GPU copy back failed: angle");
-  err = cudaMemcpy(cpu_photons.E.data(), d_E, n_photons * sizeof(double), cudaMemcpyDeviceToHost); Insist(!err, "SoA GPU copy back failed: E");
-  err = cudaMemcpy(cpu_photons.E0.data(), d_E0, n_photons * sizeof(double), cudaMemcpyDeviceToHost); Insist(!err, "SoA GPU copy back failed: E0");
-  err = cudaMemcpy(cpu_photons.life_dx.data(), d_life_dx, n_photons * sizeof(double), cudaMemcpyDeviceToHost); Insist(!err, "SoA GPU copy back failed: life_dx");
-  err = cudaMemcpy(cpu_photons.rng.data(), d_rng, n_photons * sizeof(RNG), cudaMemcpyDeviceToHost); Insist(!err, "SoA GPU copy back failed: rng");
-  err = cudaMemcpy(cpu_cell_tallies.data(), d_cell_tallies, n_cells * sizeof(Cell_Tally), cudaMemcpyDeviceToHost); Insist(!err, "SoA GPU copy back failed: cell_tallies");
-
-  // --- Free GPU Memory ---
-  cudaFree(d_cell_ID); cudaFree(d_group); cudaFree(d_source_type); cudaFree(d_descriptors);
-  cudaFree(d_pos); cudaFree(d_angle); cudaFree(d_E); cudaFree(d_E0); cudaFree(d_life_dx); cudaFree(d_rng);
-  cudaFree(d_cell_tallies); cudaFree(d_emission_groups);
-  cudaFree(d_active_indices_1); cudaFree(d_active_indices_2);
-  cudaFree(d_final_event_types);
-  cudaFree(d_event_distances); cudaFree(d_event_counters); cudaFree(d_event_queue_positions);
-  cudaFree(d_scatter_indices); cudaFree(d_boundary_indices); cudaFree(d_census_indices); cudaFree(d_killed_indices);
-  cudaFree(d_next_active_count_atomic);
-}
-
-
-
 
 
 //----------------------------------------------------------------------------//
@@ -1561,6 +1382,7 @@ void gpu_event_transport_photons(const uint32_t rank_cell_offset,
   err = cudaMalloc((void **)&d_event_counters, sizeof(unsigned int) * NUM_EVENT_TYPES); Insist(!err, "GPU AoS Malloc: d_event_counters");
   err = cudaMemcpy(d_event_counters, h_zero_counters.data(), sizeof(unsigned int) * NUM_EVENT_TYPES, cudaMemcpyHostToDevice); Insist(!err, "GPU AoS Memcpy H2D: d_event_counters");
   err = cudaMalloc((void **)&d_next_active_count_atomic, sizeof(unsigned int)); Insist(!err, "GPU AoS Malloc: d_next_active_count_atomic");
+  // No need to initialize d_next_active_count_atomic to 0 on host, kernel will do it via reset kernel or cudaMemset.
 
   // Event-Specific Index Lists
   err = cudaMalloc((void **)&d_scatter_indices, sizeof(uint32_t) * n_photons); Insist(!err, "GPU AoS Malloc: d_scatter_indices");
@@ -1656,7 +1478,6 @@ void gpu_event_transport_photons(const uint32_t rank_cell_offset,
     err = cudaGetLastError(); Insist(!err, "GPU AoS Kernel Launch Error: compact_active_list");
 
     // Get the new active count
-    // D2H 
     unsigned int h_next_active_count = 0;
     err = cudaMemcpy(&h_next_active_count, d_next_active_count_atomic, sizeof(unsigned int), cudaMemcpyDeviceToHost);
     Insist(!err, "GPU AoS Memcpy D2H Error: d_next_active_count_atomic");
@@ -1691,7 +1512,214 @@ void gpu_event_transport_photons(const uint32_t rank_cell_offset,
   cudaFree(d_next_active_count_atomic);
 }
 
+//----------------------------------------------------------------------------//
+// GPU Transport Function (SoA) - Event Based                                 //
+//----------------------------------------------------------------------------//
+void gpu_event_transport_photons(const uint32_t rank_cell_offset,
+    PhotonArray &cpu_photons, const Cell *device_cells_ptr,
+    std::vector<Cell_Tally> &cpu_cell_tallies,
+    const std::vector<EmissionGroupData>& emission_groups) // Pass host emission data
+{
+  uint32_t n_photons = static_cast<uint32_t>(cpu_photons.size());
+   if (n_photons == 0) return;
 
+  size_t n_cells = cpu_cell_tallies.size();
+  size_t n_emission_groups = emission_groups.size();
+   if (n_cells != n_emission_groups) {
+      std::cerr << "Error: Mismatch between cell tally count and emission group count." << std::endl;
+      return;
+  }
+
+  cudaError_t err;
+
+  // --- Allocate GPU Memory ---
+  // SoA Photon Data Arrays
+  uint32_t* d_cell_ID; uint32_t* d_group; uint32_t* d_source_type;
+  unsigned char* d_descriptors; std::array<double, 3>* d_pos; std::array<double, 3>* d_angle;
+  double* d_E; double* d_E0; double* d_life_dx; RNG* d_rng;
+  Cell_Tally* d_cell_tallies; EmissionGroupData* d_emission_groups;
+  uint32_t *d_active_indices_1, *d_active_indices_2;
+  GPUEventType *d_event_types_1, *d_event_types_2;
+  double *d_event_distances; unsigned int *d_event_counters;
+  uint32_t *d_event_queue_positions;
+  uint32_t *d_scatter_indices, *d_boundary_indices, *d_census_indices, *d_killed_indices;
+  unsigned int *d_next_active_count_atomic;
+
+  // Malloc SoA arrays
+  err = cudaMalloc((void**)&d_cell_ID, n_photons * sizeof(uint32_t)); Insist(!err, "SoA GPU malloc failed: cell_ID");
+  err = cudaMalloc((void**)&d_group, n_photons * sizeof(uint32_t)); Insist(!err, "SoA GPU malloc failed: group");
+  err = cudaMalloc((void**)&d_source_type, n_photons * sizeof(uint32_t)); Insist(!err, "SoA GPU malloc failed: source_type");
+  err = cudaMalloc((void**)&d_descriptors, n_photons * sizeof(unsigned char)); Insist(!err, "SoA GPU malloc failed: descriptors");
+  err = cudaMalloc((void**)&d_pos, n_photons * sizeof(std::array<double, 3>)); Insist(!err, "SoA GPU malloc failed: pos");
+  err = cudaMalloc((void**)&d_angle, n_photons * sizeof(std::array<double, 3>)); Insist(!err, "SoA GPU malloc failed: angle");
+  err = cudaMalloc((void**)&d_E, n_photons * sizeof(double)); Insist(!err, "SoA GPU malloc failed: E");
+  err = cudaMalloc((void**)&d_E0, n_photons * sizeof(double)); Insist(!err, "SoA GPU malloc failed: E0");
+  err = cudaMalloc((void**)&d_life_dx, n_photons * sizeof(double)); Insist(!err, "SoA GPU malloc failed: life_dx");
+  err = cudaMalloc((void**)&d_rng, n_photons * sizeof(RNG)); Insist(!err, "SoA GPU malloc failed: rng");
+
+  // Malloc other data
+  err = cudaMalloc((void**)&d_cell_tallies, n_cells * sizeof(Cell_Tally)); Insist(!err, "SoA GPU malloc failed: cell_tallies");
+  err = cudaMalloc((void**)&d_emission_groups, n_emission_groups * sizeof(EmissionGroupData)); Insist(!err, "SoA GPU malloc failed: emission_groups");
+
+  // Malloc event processing data (same as AoS)
+  err = cudaMalloc((void **)&d_active_indices_1, sizeof(uint32_t) * n_photons); Insist(!err, "GPU SoA Malloc: d_active_indices_1");
+  err = cudaMalloc((void **)&d_active_indices_2, sizeof(uint32_t) * n_photons); Insist(!err, "GPU SoA Malloc: d_active_indices_2");
+  err = cudaMalloc((void **)&d_event_types_1, sizeof(GPUEventType) * n_photons); Insist(!err, "GPU SoA Malloc: d_event_types_1");
+  err = cudaMalloc((void **)&d_event_types_2, sizeof(GPUEventType) * n_photons); Insist(!err, "GPU SoA Malloc: d_event_types_2");
+  err = cudaMalloc((void **)&d_event_distances, sizeof(double) * n_photons); Insist(!err, "GPU SoA Malloc: d_event_distances");
+  err = cudaMalloc((void **)&d_event_queue_positions, sizeof(uint32_t) * n_photons); Insist(!err, "GPU SoA Malloc: d_event_queue_positions");
+  const int NUM_EVENT_TYPES = 4;
+  err = cudaMalloc((void **)&d_event_counters, sizeof(unsigned int) * NUM_EVENT_TYPES); Insist(!err, "GPU SoA Malloc: d_event_counters");
+  err = cudaMalloc((void **)&d_next_active_count_atomic, sizeof(unsigned int)); Insist(!err, "GPU SoA Malloc: d_next_active_count_atomic");
+  err = cudaMalloc((void **)&d_scatter_indices, sizeof(uint32_t) * n_photons); Insist(!err, "GPU SoA Malloc: d_scatter_indices");
+  err = cudaMalloc((void **)&d_boundary_indices, sizeof(uint32_t) * n_photons); Insist(!err, "GPU SoA Malloc: d_boundary_indices");
+  err = cudaMalloc((void **)&d_census_indices, sizeof(uint32_t) * n_photons); Insist(!err, "GPU SoA Malloc: d_census_indices");
+  err = cudaMalloc((void **)&d_killed_indices, sizeof(uint32_t) * n_photons); Insist(!err, "GPU SoA Malloc: d_killed_indices");
+
+  // --- Copy Initial Data H2D ---
+  // Copy SoA arrays
+  err = cudaMemcpy(d_cell_ID, cpu_photons.cell_ID.data(), n_photons * sizeof(uint32_t), cudaMemcpyHostToDevice); Insist(!err, "SoA GPU copy failed: cell_ID");
+  err = cudaMemcpy(d_group, cpu_photons.group.data(), n_photons * sizeof(uint32_t), cudaMemcpyHostToDevice); Insist(!err, "SoA GPU copy failed: group");
+  err = cudaMemcpy(d_source_type, cpu_photons.source_type.data(), n_photons * sizeof(uint32_t), cudaMemcpyHostToDevice); Insist(!err, "SoA GPU copy failed: source_type");
+  err = cudaMemcpy(d_descriptors, cpu_photons.descriptors.data(), n_photons * sizeof(unsigned char), cudaMemcpyHostToDevice); Insist(!err, "SoA GPU copy failed: descriptors");
+  err = cudaMemcpy(d_pos, cpu_photons.pos.data(), n_photons * sizeof(std::array<double, 3>), cudaMemcpyHostToDevice); Insist(!err, "SoA GPU copy failed: pos");
+  err = cudaMemcpy(d_angle, cpu_photons.angle.data(), n_photons * sizeof(std::array<double, 3>), cudaMemcpyHostToDevice); Insist(!err, "SoA GPU copy failed: angle");
+  err = cudaMemcpy(d_E, cpu_photons.E.data(), n_photons * sizeof(double), cudaMemcpyHostToDevice); Insist(!err, "SoA GPU copy failed: E");
+  err = cudaMemcpy(d_E0, cpu_photons.E0.data(), n_photons * sizeof(double), cudaMemcpyHostToDevice); Insist(!err, "SoA GPU copy failed: E0");
+  err = cudaMemcpy(d_life_dx, cpu_photons.life_dx.data(), n_photons * sizeof(double), cudaMemcpyHostToDevice); Insist(!err, "SoA GPU copy failed: life_dx");
+  err = cudaMemcpy(d_rng, cpu_photons.rng.data(), n_photons * sizeof(RNG), cudaMemcpyHostToDevice); Insist(!err, "SoA GPU copy failed: rng");
+  err = cudaMemcpy(d_cell_tallies, cpu_cell_tallies.data(), n_cells * sizeof(Cell_Tally), cudaMemcpyHostToDevice); Insist(!err, "SoA GPU copy failed: cell_tallies");
+  err = cudaMemcpy(d_emission_groups, emission_groups.data(), n_emission_groups * sizeof(EmissionGroupData), cudaMemcpyHostToDevice); Insist(!err, "SoA GPU copy failed: emission_groups");
+  std::vector<uint32_t> h_initial_indices(n_photons);
+  std::iota(h_initial_indices.begin(), h_initial_indices.end(), 0);
+  err = cudaMemcpy(d_active_indices_1, h_initial_indices.data(), sizeof(uint32_t) * n_photons, cudaMemcpyHostToDevice); Insist(!err, "GPU SoA Memcpy H2D: d_active_indices_1");
+  std::vector<unsigned int> h_zero_counters(NUM_EVENT_TYPES, 0);
+  err = cudaMemcpy(d_event_counters, h_zero_counters.data(), sizeof(unsigned int) * NUM_EVENT_TYPES, cudaMemcpyHostToDevice); Insist(!err, "GPU SoA Memcpy H2D: d_event_counters");
+
+
+  // --- Event Loop ---
+  uint32_t current_active_count = n_photons;
+  uint32_t* d_current_active_indices = d_active_indices_1;
+  uint32_t* d_next_active_indices = d_active_indices_2;
+  GPUEventType* d_current_event_types = d_event_types_1;
+
+  int n_threads = Constants::n_threads_per_block;
+
+  while (current_active_count > 0) {
+    int n_blocks = (current_active_count + n_threads - 1) / n_threads;
+
+    // 1. Calculate distances and initial event types
+    calculate_events_kernel_soa<<<n_blocks, n_threads>>>(
+        rank_cell_offset, d_cell_ID, d_group, d_pos, d_angle, d_life_dx, d_rng,
+        device_cells_ptr, d_current_active_indices, current_active_count,
+        d_current_event_types, d_event_distances);
+    err = cudaGetLastError(); Insist(!err, "GPU SoA Kernel Launch Error: calculate_events");
+
+    // 2. Reset event counters
+    reset_atomic_counters_kernel<<<(NUM_EVENT_TYPES + n_threads -1)/n_threads, n_threads>>>(d_event_counters, NUM_EVENT_TYPES);
+    err = cudaGetLastError(); Insist(!err, "GPU SoA Kernel Launch Error: reset_atomic_counters");
+
+    // 3. Update state, tally, check kills, classify, and get queue positions
+    update_state_tally_and_classify_kernel_soa<<<n_blocks, n_threads>>>(
+        rank_cell_offset,
+        d_cell_ID, d_group, d_descriptors, d_pos, d_angle, d_E, d_E0, d_life_dx, // Photon data
+        device_cells_ptr, d_cell_tallies, // Other data
+        d_current_active_indices, current_active_count,
+        d_current_event_types, d_event_distances, // Input event info
+        d_current_event_types, // Output final event type
+        d_event_counters, d_event_queue_positions); // Output counters/positions
+    err = cudaGetLastError(); Insist(!err, "GPU SoA Kernel Launch Error: update_state_tally_classify");
+
+    // 4. Place original indices into event-specific lists
+    partition_photons_kernel_soa<<<n_blocks, n_threads>>>( 
+        d_current_active_indices, current_active_count,
+        d_current_event_types, d_event_queue_positions,
+        d_scatter_indices, d_boundary_indices, d_census_indices, d_killed_indices);
+    err = cudaGetLastError(); Insist(!err, "GPU SoA Kernel Launch Error: partition_photons");
+
+    // 5. Get event counts
+    std::vector<unsigned int> h_event_counts(NUM_EVENT_TYPES);
+    err = cudaMemcpy(h_event_counts.data(), d_event_counters, sizeof(unsigned int) * NUM_EVENT_TYPES, cudaMemcpyDeviceToHost);
+    Insist(!err, "GPU SoA Memcpy D2H Error: d_event_counters");
+    uint32_t scatter_count = h_event_counts[0];
+    uint32_t boundary_count = h_event_counts[1];
+    uint32_t census_count = h_event_counts[2];
+    uint32_t killed_count = h_event_counts[3];
+
+    // 6. Process Events
+    if (scatter_count > 0) {
+        int scatter_blocks = (scatter_count + n_threads - 1) / n_threads;
+        process_scatter_kernel_soa<<<scatter_blocks, n_threads>>>(
+            d_group, d_descriptors, d_angle, d_rng, d_cell_ID, // Photon data
+            device_cells_ptr, d_emission_groups, // Other data
+            d_scatter_indices, scatter_count, rank_cell_offset);
+        err = cudaGetLastError(); Insist(!err, "GPU SoA Kernel Launch Error: process_scatter");
+    }
+    if (boundary_count > 0) {
+        int boundary_blocks = (boundary_count + n_threads - 1) / n_threads;
+        process_boundary_kernel_soa<<<boundary_blocks, n_threads>>>(
+            d_cell_ID, d_descriptors, d_angle, d_pos, // Photon data
+            device_cells_ptr, // Other data
+            d_boundary_indices, boundary_count, rank_cell_offset);
+        err = cudaGetLastError(); Insist(!err, "GPU SoA Kernel Launch Error: process_boundary");
+    }
+    if (census_count > 0) {
+        int census_blocks = (census_count + n_threads - 1) / n_threads;
+        process_census_kernel_soa<<<census_blocks, n_threads>>>(
+            d_descriptors, d_census_indices, census_count);
+        err = cudaGetLastError(); Insist(!err, "GPU SoA Kernel Launch Error: process_census");
+    }
+    if (killed_count > 0) {
+        int killed_blocks = (killed_count + n_threads - 1) / n_threads;
+        process_killed_kernel_soa<<<killed_blocks, n_threads>>>(
+            d_killed_indices, killed_count);
+        err = cudaGetLastError(); Insist(!err, "GPU SoA Kernel Launch Error: process_killed");
+    }
+
+    // 7. Compact active list for next iteration
+    err = cudaMemset(d_next_active_count_atomic, 0, sizeof(unsigned int)); Insist(!err, "GPU SoA Memset Error: d_next_active_count_atomic");
+
+    compact_active_list_kernel_soa<<<n_blocks, n_threads>>>( // Can reuse AoS version
+        d_descriptors, d_current_active_indices, current_active_count,
+        d_next_active_indices, d_next_active_count_atomic);
+    err = cudaGetLastError(); Insist(!err, "GPU SoA Kernel Launch Error: compact_active_list");
+
+    // Get the new active count
+    unsigned int h_next_active_count = 0;
+    err = cudaMemcpy(&h_next_active_count, d_next_active_count_atomic, sizeof(unsigned int), cudaMemcpyDeviceToHost);
+    Insist(!err, "GPU SoA Memcpy D2H Error: d_next_active_count_atomic");
+    current_active_count = h_next_active_count;
+
+    // Swap active list pointers
+    std::swap(d_current_active_indices, d_next_active_indices);
+
+  } // End while(current_active_count > 0)
+
+  cudaDeviceSynchronize();
+
+  // --- Copy Results Back ---
+  err = cudaMemcpy(cpu_photons.cell_ID.data(), d_cell_ID, n_photons * sizeof(uint32_t), cudaMemcpyDeviceToHost); Insist(!err, "SoA GPU copy back failed: cell_ID");
+  err = cudaMemcpy(cpu_photons.group.data(), d_group, n_photons * sizeof(uint32_t), cudaMemcpyDeviceToHost); Insist(!err, "SoA GPU copy back failed: group");
+  err = cudaMemcpy(cpu_photons.source_type.data(), d_source_type, n_photons * sizeof(uint32_t), cudaMemcpyDeviceToHost); Insist(!err, "SoA GPU copy back failed: source_type");
+  err = cudaMemcpy(cpu_photons.descriptors.data(), d_descriptors, n_photons * sizeof(unsigned char), cudaMemcpyDeviceToHost); Insist(!err, "SoA GPU copy back failed: descriptors");
+  err = cudaMemcpy(cpu_photons.pos.data(), d_pos, n_photons * sizeof(std::array<double, 3>), cudaMemcpyDeviceToHost); Insist(!err, "SoA GPU copy back failed: pos");
+  err = cudaMemcpy(cpu_photons.angle.data(), d_angle, n_photons * sizeof(std::array<double, 3>), cudaMemcpyDeviceToHost); Insist(!err, "SoA GPU copy back failed: angle");
+  err = cudaMemcpy(cpu_photons.E.data(), d_E, n_photons * sizeof(double), cudaMemcpyDeviceToHost); Insist(!err, "SoA GPU copy back failed: E");
+  err = cudaMemcpy(cpu_photons.E0.data(), d_E0, n_photons * sizeof(double), cudaMemcpyDeviceToHost); Insist(!err, "SoA GPU copy back failed: E0");
+  err = cudaMemcpy(cpu_photons.life_dx.data(), d_life_dx, n_photons * sizeof(double), cudaMemcpyDeviceToHost); Insist(!err, "SoA GPU copy back failed: life_dx");
+  err = cudaMemcpy(cpu_photons.rng.data(), d_rng, n_photons * sizeof(RNG), cudaMemcpyDeviceToHost); Insist(!err, "SoA GPU copy back failed: rng");
+  err = cudaMemcpy(cpu_cell_tallies.data(), d_cell_tallies, n_cells * sizeof(Cell_Tally), cudaMemcpyDeviceToHost); Insist(!err, "SoA GPU copy back failed: cell_tallies");
+
+  // --- Free GPU Memory ---
+  cudaFree(d_cell_ID); cudaFree(d_group); cudaFree(d_source_type); cudaFree(d_descriptors);
+  cudaFree(d_pos); cudaFree(d_angle); cudaFree(d_E); cudaFree(d_E0); cudaFree(d_life_dx); cudaFree(d_rng);
+  cudaFree(d_cell_tallies); cudaFree(d_emission_groups);
+  cudaFree(d_active_indices_1); cudaFree(d_active_indices_2);
+  cudaFree(d_event_types_1); cudaFree(d_event_types_2);
+  cudaFree(d_event_distances); cudaFree(d_event_counters); cudaFree(d_event_queue_positions);
+  cudaFree(d_scatter_indices); cudaFree(d_boundary_indices); cudaFree(d_census_indices); cudaFree(d_killed_indices);
+  cudaFree(d_next_active_count_atomic);
+}
 
 
 #endif // USE_CUDA

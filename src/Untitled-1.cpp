@@ -826,16 +826,16 @@ __global__ void calculate_events_kernel_aos(
     const uint32_t rank_cell_offset,
     Photon* all_photons,
     const Cell* cells,
-    const uint32_t* active_indices, 
+    const uint32_t* active_indices, // Indices of active photons
     uint32_t active_count,
-    GPUEventType* event_types,      // Event type for each active photon
-    double* event_distances)        // Event distance for each active photon
+    GPUEventType* event_types,      // Output: Event type for each active photon
+    double* event_distances)        // Output: Event distance for each active photon
 {
     uint32_t active_idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (active_idx >= active_count) return;
 
-    uint32_t photon_idx = active_indices[active_idx]; 
-    Photon& phtn = all_photons[photon_idx]; 
+    uint32_t photon_idx = active_indices[active_idx]; // Get the original photon index
+    Photon& phtn = all_photons[photon_idx]; // Use reference
     RNG& rng = phtn.get_rng();
 
     uint32_t local_cell_index = phtn.get_cell() - rank_cell_offset;
@@ -875,7 +875,7 @@ __global__ void update_state_tally_and_classify_kernel_aos(
     const double* event_distances,
     GPUEventType* event_types_out,      // Final event type 
     unsigned int* event_counters,       // Atomic counters for scatter, boundary, census, kill
-    uint32_t* event_queue_positions)    //  position in the specific event queue
+    uint32_t* event_queue_positions)    // Output: position in the specific event queue
 {
     uint32_t active_idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (active_idx >= active_count) return;
@@ -905,14 +905,14 @@ __global__ void update_state_tally_and_classify_kernel_aos(
     if (phtn.below_cutoff(Constants::cutoff_fraction)) {
         atomicAdd(&cell_tallies[local_cell_index].abs_E, phtn.get_E()); // Tally remaining E
         phtn.set_E(0.0); // Zero out energy
-        event_type = GPU_KILLED; 
+        event_type = GPU_KILLED; // Override event type
         phtn.set_descriptor(Constants::KILLED); // Set final descriptor
     }
 
     // Store final event type for partitioning
     event_types_out[active_idx] = event_type;
 
-    //  increment the counter for the determined event type and get queue position
+    // Atomically increment the counter for the determined event type and get queue position
     // Map GPUEventType enum to counter index (e.g., SCATTER=0, BOUNDARY=1, CENSUS=2, KILLED=3)
     unsigned int queue_idx = 0; // Default or invalid
     switch(event_type) {
@@ -922,7 +922,7 @@ __global__ void update_state_tally_and_classify_kernel_aos(
         case GPU_KILLED:   queue_idx = 3; break;
         default: break; // Should not happen for these types
     }
-    //  increment the counter and store the previous value
+    // Atomically increment the counter and store the previous value (which is the index)
     event_queue_positions[active_idx] = atomicAdd(&event_counters[queue_idx], 1);
 }
 
@@ -931,10 +931,10 @@ __global__ void partition_photons_kernel_aos(
     uint32_t active_count,
     const GPUEventType* final_event_types,// Final event type for each active photon
     const uint32_t* event_queue_positions,// Position within the event queue
-    uint32_t* scatter_indices,            // Original indices of scatter photons
-    uint32_t* boundary_indices,           // Original indices of boundary photons
-    uint32_t* census_indices,             // Original indices of census photons
-    uint32_t* killed_indices)             // Original indices of killed photons
+    uint32_t* scatter_indices,            // Output: Original indices of scatter photons
+    uint32_t* boundary_indices,           // Output: Original indices of boundary photons
+    uint32_t* census_indices,             // Output: Original indices of census photons
+    uint32_t* killed_indices)             // Output: Original indices of killed photons
 {
     uint32_t active_idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (active_idx >= active_count) return;
@@ -943,7 +943,7 @@ __global__ void partition_photons_kernel_aos(
     GPUEventType event_type = final_event_types[active_idx];
     uint32_t queue_pos = event_queue_positions[active_idx];
 
-    // Write the original photon index into the correct event list 
+    // Write the original photon index into the correct event list at the calculated position
     switch(event_type) {
         case GPU_SCATTER:  scatter_indices[queue_pos] = photon_idx; break;
         case GPU_BOUNDARY: boundary_indices[queue_pos] = photon_idx; break;
@@ -1041,7 +1041,7 @@ __global__ void process_killed_kernel_aos(
     if (killed_idx >= killed_count) return;
 
     uint32_t photon_idx = killed_indices[killed_idx];
-    // Descriptor already set to killed in update_state kernel
+    // Descriptor already set to KILLED in update_state kernel
     // Final energy already tallied in update_state kernel
 }
 
@@ -1166,12 +1166,12 @@ __global__ void process_transport_step_kernel_soa(
 __global__ void partition_photons_kernel_soa(
     const uint32_t* active_indices,       
     uint32_t active_count,
-    const GPUEventType* final_event_types,
+    const GPUEventType* final_event_types,// Final event type for each active photon
     const uint32_t* event_queue_positions,// Position within the event queue
-    uint32_t* scatter_indices,            // Original indices of scatter photons
-    uint32_t* boundary_indices,           // Original indices of boundary photons
-    uint32_t* census_indices,             // Original indices of census photons
-    uint32_t* killed_indices)             // Original indices of killed photons
+    uint32_t* scatter_indices,            // Output: Original indices of scatter photons
+    uint32_t* boundary_indices,           // Output: Original indices of boundary photons
+    uint32_t* census_indices,             // Output: Original indices of census photons
+    uint32_t* killed_indices)             // Output: Original indices of killed photons
 {
     uint32_t active_idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (active_idx >= active_count) return;
@@ -1561,6 +1561,7 @@ void gpu_event_transport_photons(const uint32_t rank_cell_offset,
   err = cudaMalloc((void **)&d_event_counters, sizeof(unsigned int) * NUM_EVENT_TYPES); Insist(!err, "GPU AoS Malloc: d_event_counters");
   err = cudaMemcpy(d_event_counters, h_zero_counters.data(), sizeof(unsigned int) * NUM_EVENT_TYPES, cudaMemcpyHostToDevice); Insist(!err, "GPU AoS Memcpy H2D: d_event_counters");
   err = cudaMalloc((void **)&d_next_active_count_atomic, sizeof(unsigned int)); Insist(!err, "GPU AoS Malloc: d_next_active_count_atomic");
+  // No need to initialize d_next_active_count_atomic to 0 on host, kernel will do it via reset kernel or cudaMemset.
 
   // Event-Specific Index Lists
   err = cudaMalloc((void **)&d_scatter_indices, sizeof(uint32_t) * n_photons); Insist(!err, "GPU AoS Malloc: d_scatter_indices");
