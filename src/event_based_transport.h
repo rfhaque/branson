@@ -1072,6 +1072,17 @@ __global__ void compact_active_list_kernel_aos(
 // SoA GPU Event Kernels                                                      //
 //----------------------------------------------------------------------------//
 
+template <typename T>
+__device__ inline T warp_reduce_sum(T val) {
+  unsigned int mask = __activemask();
+  for (int offset = 16; offset > 0; offset /= 2) {
+    val += __shfl_down_sync(mask, val, offset);
+  }
+  return val;
+}
+
+__device__ inline unsigned warp_mask() { return __activemask(); }
+
 
 
 __global__ void process_transport_step_kernel_soa(
@@ -1088,11 +1099,14 @@ __global__ void process_transport_step_kernel_soa(
     uint32_t* event_queue_positions
 )
   {
+
     uint32_t active_idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (active_idx >= active_count) return;
 
     uint32_t photon_idx = active_indices[active_idx]; 
     RNG& rng = rng_array[photon_idx];
+
+    uint32_t lane_id = threadIdx.x % 32;
 
     // --- 1. calculate Event Distances
 
@@ -1130,8 +1144,8 @@ __global__ void process_transport_step_kernel_soa(
     const double absorbed_E = current_E * (1.0 - exp(-sigma_a * f * distance));
     const double track_E_contrib = (sigma_a > 0.0 && f > 0.0) ? absorbed_E / (sigma_a * f) : 0.0;
 
-    atomicAdd(&cell_tallies[local_cell_index].abs_E, absorbed_E);
-    atomicAdd(&cell_tallies[local_cell_index].track_E, track_E_contrib);
+    // atomicAdd(&cell_tallies[local_cell_index].abs_E, absorbed_E);
+    // atomicAdd(&cell_tallies[local_cell_index].track_E, track_E_contrib);
 
     // Update photon state
     double next_E = current_E - absorbed_E;
@@ -1140,16 +1154,28 @@ __global__ void process_transport_step_kernel_soa(
     pos[photon_idx][1] += angle[photon_idx][1] * distance;
     pos[photon_idx][2] += angle[photon_idx][2] * distance;
     life_dx[photon_idx] -= distance;
+
     
     // Check energy cutoff
     if (next_E / E0[photon_idx] < Constants::cutoff_fraction) {
-        atomicAdd(&cell_tallies[local_cell_index].abs_E, next_E); // Tally remaining E
+        // atomicAdd(&cell_tallies[local_cell_index].abs_E, next_E); // Tally remaining E
         E[photon_idx] = 0.0; 
         event_type = GPU_KILLED; 
         descriptors[photon_idx] = static_cast<unsigned char>(Constants::KILLED); // Set final descriptor
     }
 
     final_event_types[active_idx] = event_type;
+
+    unsigned int cell_mask = __match_any_sync(warp_mask(), local_cell_index);
+
+    double warp_total_abs_E = warp_reduce_sum(absorbed_E + (event_type == GPU_KILLED ? next_E : 0.0));
+    double warp_total_track_E = warp_reduce_sum(track_E_contrib);
+
+    // if (lane_id == (__ffs(cell_mask) -1)) {
+    if (lane_id == 0) {
+      atomicAdd(&cell_tallies[local_cell_index].abs_E, warp_total_abs_E);
+      atomicAdd(&cell_tallies[local_cell_index].track_E, warp_total_track_E);
+    }
 
     //  increment the counter for the determined event type and get queue position
     unsigned int queue_idx = 0;
