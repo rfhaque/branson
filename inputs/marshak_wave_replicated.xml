@@ -2,11 +2,11 @@
   <common>
     <method>IMC</method>
     <t_start>0.0</t_start>
-    <t_stop>0.1</t_stop>
+    <t_stop>0.01</t_stop>
     <dt_start>0.01</dt_start>
     <t_mult>1.0</t_mult>
     <dt_max>1.0</dt_max>
-    <photons>500000</photons>
+    <photons>5000000</photons>
     <seed>14706</seed>
     <use_combing>TRUE</use_combing>
     <use_gpu_transporter>TRUE</use_gpu_transporter>

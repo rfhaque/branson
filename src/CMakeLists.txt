@@ -11,24 +11,48 @@
 
 cmake_minimum_required (VERSION 3.11)
 
-
 if(DEFINED ENV{CUDADIR}
    OR DEFINED ENV{CUDACXX}
    OR DEFINED ENV{CUDA_HOME})
-  message("CUDA module found (CUDA environment variables set) making GPU BRANSON")
-  add_compile_definitions(USE_GPU)
-  set(CUDA_DBS_STRING "CUDA")
-  enable_language(CUDA)
-else()
-  message("CUDA module not found making CPU only BRANSON")
-  set(CUDA_DBS_STRING "")
+  if(USE_GPU)
+    set(GPU_DBS_STRING "CUDA" CACHE STRING "If CUDA is available, this variable is 'CUDA'")
+    enable_language(CUDA)
+  endif()
+elseif(
+  "$ENV{LOADEDMODULES}" MATCHES "rocmcc"
+  OR DEFINED ENV{HIPCXX}
+  OR DEFINED CMAKE_HIP_COMPILER
+  OR DEFINED ENV{ROCM_PATH})
+  if(USE_GPU)
+    set(GPU_DBS_STRING "HIP" CACHE STRING "If HIP is available, this variable is 'HIP'")
+    #if(CMAKE_HIP_COMPILER MATCHES "CC")
+    #  set(CMAKE_HIP_FLAGS "-x hip")
+    #endif()
+    enable_language(HIP)
+  endif()
 endif()
 
+message("GPU_DBS_STRING: ${GPU_DBS_STRING}")
 project (BRANSON
   VERSION 0.8
   DESCRIPTION "Branson can be used to study different algorithms for parallel Monte Carlo transport. Currently it contains particle passing and mesh passing methods for domain decomposition."
 #  HOMEPAGE URL "https://github.com/lanl/branson" # needs cmake 3.12+
-  LANGUAGES CXX C ${CUDA_DBS_STRING})
+  LANGUAGES CXX C ${GPU_DBS_STRING})
+
+get_property(_LANGUAGES_ GLOBAL PROPERTY ENABLED_LANGUAGES)
+
+message("Languages: ${_LANGUAGES_}")
+if((_LANGUAGES_ MATCHES CUDA OR _LANGUAGES_ MATCHES HIP) AND USE_GPU)
+  message("CUDA/HIP module found (CUDA/HIP environment variables set) and USE_GPU is on, making GPU BRANSON")
+  add_compile_definitions(HAS_GPU)
+elseif(USE_GPU)
+  message(FATAL_ERROR "CUDA/HIP module NOT found (CUDA/HIP environment variables set) but USE_GPU is on, reconfigure with USE_GPU off or fix modules")
+elseif(NOT USE_GPU)
+  message("GPU mode not requested, making CPU only BRANSON")
+else()
+  message("CUDA/HIP module not found and GPU mode not requested, making CPU only BRANSON")
+endif()
+
 
 # Build system support files are located here.
 set( CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/config )
@@ -66,7 +90,7 @@ set( SITENAME ${SITENAME} CACHE "STRING" "Name of the current machine" FORCE)
 # Setup compiler options
 set( CXX_STANDARD_REQUIRED ON )
 set( CMAKE_CXX_STANDARD 17 )
-
+set(CMAKE_CUDA_ARCHITECTURES 70 75 80 86 90)
 # Do not enable extensions (e.g.: --std=gnu++11)
 set( CMAKE_CXX_EXTENSIONS OFF )
 set( CMAKE_C_EXTENSIONS   OFF )
@@ -85,35 +109,30 @@ endif ()
 #set(GCC_SANITIZE_LINK_FLAGS "-fsanitize=address")
 #set(GCC_SANITIZE_COMPILE_FLAGS "-fsanitize=undefined")
 #set(GCC_SANITIZE_LINK_FLAGS "-fsanitize=undefined")
-message(STATUS "C++ Compiler ID: ${CMAKE_CXX_COMPILER_ID}")
+
 # add compiler flags
 if( CMAKE_CXX_COMPILER_ID STREQUAL "GNU" )
-set( CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g -Wall -O0 -march=native -fopenmp")
-# set( CMAKE_CXX_FLAGS_RELEASE "-g -O3 -march=native -fopenmp -ffast-math -funroll-loops -fno-strict-aliasing -fopt-info-vec-optimized=runAVX512.optrpt")
-set(CMAKE_CXX_FLAGS_RELEASE "-g -O3 -march=znver1 -mtune=znver1 -fopenmp -ffast-math -funroll-loops -ftree-vectorize")
-# set(CMAKE_CXX_FLAGS_RELEASE "-g -O3 -march=znver1 -mtune=znver1 -fopenmp -ffast-math -funroll-loops -mavx2 -fvectorize")
- 
-#set( CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} ${GCC_SANITIZE_COMPILE_FLAGS}")
+  set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=native -ffp-contract=off")
+  set( CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -Wall -O0")
+  #set( CMAKE_CXX_FLAGS_RELEASE "-march=native  -O3 -funroll-loops -fno-var-tracking-assignments")
+  set( CMAKE_CXX_FLAGS_RELEASE "-g -O3 -funroll-loops -fno-var-tracking-assignments")
+  # optionally add sanitize flags
+  #set( CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} ${GCC_SANITIZE_COMPILE_FLAGS}")
   #set( CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${GCC_SANITIZE_LINK_FLAGS}")
 elseif( CMAKE_CXX_COMPILER_ID STREQUAL "Intel" )
   set( CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -Wall -O0")
-  # note that the "fp-model=precise" flag significantly limite vectorization and slows down
+  # note that the "fp-model=precise" flag significantly limits vectorization and slows down
   # branson but it makes it the hardware counter data match Jayenne more closely (Jayenne uses
   # this flag)
-  set( CMAKE_CXX_FLAGS_RELEASE "-g -O3 -fp-speculation=fast -xhost -qno-opt-dynamic-align")
+  #set( CMAKE_CXX_FLAGS_RELEASE "-g -O3 -fp-speculation=fast -xhost -qno-opt-dynamic-align")
+	set(CMAKE_CXX_FLAGS_RELEASE "-g -O3 -xhost -qopenmp -qopt-zmm-usage=high -fp-speculation=fast -qopt-report=3 -qopt-report-file=runAVX512.optrpt -no-vec") # "-no-vec" to disable vectorization
 elseif (CMAKE_CXX_COMPILER_ID STREQUAL "IntelLLVM")
   set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g -Wall -O0 -xhost -qopenmp")
-  #set(CMAKE_CXX_FLAGS_RELEASE "-g -O3 -xhost -qopenmp -qopt-zmm-usage=high -fp-speculation=fast -qopt-report=3 -qopt-report-file=runAVX512.optrpt")
-	set(CMAKE_CXX_FLAGS_RELEASE "-g -O3 -march=native -mtune=native -qopenmp -fp-speculation=fast -qopt-report=3 -qopt-report-file=runAVX512.optrpt")
-elseif( CMAKE_CXX_COMPILER_ID STREQUAL "Clang" )
-  set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g -Wall -O0 -march=native -fopenmp")
-  set(CMAKE_CXX_FLAGS_RELEASE "-g -O3 -march=native -fopenmp -ffast-math -funroll-loops -Rpass-analysis=loop-vectorize -Rpass-missed=loop-vectorize -fno-strict-aliasing")
-  set(CMAKE_CXX_FLAGS_RELEASE "-g -O3 -march=znver1 -mtune=znver1 -fopenmp -ffast-math -funroll-loops -mavx2 -fvectorize")
+	set(CMAKE_CXX_FLAGS_RELEASE "-g -O3 -xhost -qopenmp -qopt-zmm-usage=high -fp-speculation=fast -qopt-report=3 -qopt-report-file=runAVX512.optrpt") # "-no-vec" to disable vectorization
 elseif( CMAKE_CXX_COMPILER_ID STREQUAL "Cray" )
   set( CMAKE_C_FLAGS   "${CMAKE_C_FLAGS} -g -DR123_USE_GNU_UINT128=0")
   set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -DR123_USE_GNU_UINT128=0")
 endif()
-
 
 
 #------------------------------------------------------------------------------#
@@ -166,7 +185,7 @@ message("\n")
 file(GLOB headers *.h)
 add_executable(BRANSON main.cc ${headers})
 target_include_directories( BRANSON PRIVATE
-  $<BUILD_INTERFACE:${PROJECT_BINARY_DIR}> ${PROJECT_SOURCE_DIR}/pugixml/src/)
+  $<BUILD_INTERFACE:${PROJECT_BINARY_DIR}> ${PROJECT_SOURCE_DIR}/pugixml/src/ ${PROJECT_SOURCE_DIR}/random123/ )
 set( branson_deps
   MPI::MPI_CXX
   MPI::MPI_C
@@ -194,14 +213,26 @@ endif()
 configure_file(config.h.in ${PROJECT_BINARY_DIR}/config.h)
 #------------------------------------------------------------------------------#
 
-if("${CUDA_DBS_STRING}" STREQUAL "CUDA" )
+if("${GPU_DBS_STRING}" STREQUAL "CUDA" )
   message("Setting CUDA compiler options")
-  set_target_properties(BRANSON PROPERTIES CUDA_ARCHITECTURES "75") # V100
-  #set_target_properties(BRANSON PROPERTIES CUDA_ARCHITECTURES "80") # A100
+  set_target_properties(BRANSON PROPERTIES CUDA_ARCHITECTURES "70") # V100
+  # set_target_properties(BRANSON PROPERTIES CUDA_ARCHITECTURES "80") # A100
   set_target_properties(BRANSON PROPERTIES CUDA_STANDARD 17)
   string(APPEND CMAKE_CUDA_FLAGS " -g --expt-relaxed-constexpr")
   string(APPEND CMAKE_CUDA_FLAGS " --expt-extended-lambda"  )
   set_source_files_properties("main.cc" PROPERTIES LANGUAGE CUDA)
+elseif("${GPU_DBS_STRING}" STREQUAL "HIP" )
+  message("Setting HIP compiler options")
+  if(CMAKE_HIP_COMPILER MATCHES "CC")
+    set(CMAKE_HIP_FLAGS "-x hip")
+  endif()
+  set_target_properties(BRANSON PROPERTIES HIP_ARCHITECTURES "gfx942") # MI300
+  set_target_properties(BRANSON PROPERTIES HIP_STANDARD 17)
+  string(APPEND CMAKE_HIP_FLAGS " -g -mllvm=--disable-peephole")
+  #string(APPEND CMAKE_HIP_FLAGS " --expt-extended-lambda"  )
+  set_source_files_properties("main.cc" PROPERTIES LANGUAGE HIP)
+else()
+  message("GPU Options: Not a GPU build or GPU_DBS_STRING not recognized")
 endif()
 
 target_link_libraries( BRANSON PRIVATE ${branson_deps} )
