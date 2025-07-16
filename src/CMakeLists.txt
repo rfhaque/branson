@@ -11,6 +11,8 @@
 
 cmake_minimum_required (VERSION 3.11)
 
+option(USE_GPU "user-set flag to compile in GPU code" FALSE)
+
 if(DEFINED ENV{CUDADIR}
    OR DEFINED ENV{CUDACXX}
    OR DEFINED ENV{CUDA_HOME})
@@ -215,8 +217,8 @@ configure_file(config.h.in ${PROJECT_BINARY_DIR}/config.h)
 
 if("${GPU_DBS_STRING}" STREQUAL "CUDA" )
   message("Setting CUDA compiler options")
-  set_target_properties(BRANSON PROPERTIES CUDA_ARCHITECTURES "70") # V100
-  # set_target_properties(BRANSON PROPERTIES CUDA_ARCHITECTURES "80") # A100
+  #set_target_properties(BRANSON PROPERTIES CUDA_ARCHITECTURES "70") # V100
+  set_target_properties(BRANSON PROPERTIES CUDA_ARCHITECTURES "80") # A100
   set_target_properties(BRANSON PROPERTIES CUDA_STANDARD 17)
   string(APPEND CMAKE_CUDA_FLAGS " -g --expt-relaxed-constexpr")
   string(APPEND CMAKE_CUDA_FLAGS " --expt-extended-lambda"  )

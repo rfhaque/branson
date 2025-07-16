@@ -839,12 +839,65 @@ __device__ inline T warp_reduce_sum(T val, unsigned int mask) {
 __device__ inline void warp_atomic_add(double* address, double val) {
   unsigned int match_mask = __match_any_sync(__activemask(), (unsigned long long)address);
   double subgroup_sum = warp_reduce_sum(val, match_mask);
-  unsigned int lane_id = threadIdx.x % 32; 
-  unsigned int leader_lane = (__ffs(match_mask) -1);
-  if (lane_id == leader_lane) {
-    atomicAdd(address, subgroup_sum);
+  unsigned int lane_id = __lane_id();
+  if (match_mask != 0) {  // Ensure match_mask is not zero
+    unsigned int leader_lane = __ffs(match_mask) - 1;
+    if (lane_id == leader_lane) {
+      atomicAdd(address, subgroup_sum);
+    }
   }
 }
+
+
+__device__ inline bool warp_atomic_inc_ballot(unsigned int* counter, bool pred, unsigned int& position) {
+
+    unsigned int ballot_result = __ballot_sync(__activemask(), pred);
+    if (!pred) {
+      return false;
+    }
+    // Constants
+    unsigned int lane_id = threadIdx.x % 32;
+
+    // Get active threads in warp
+    unsigned int active = __ballot_sync(__activemask(), true);
+    int num_active = __popc(active);
+    unsigned int leader_lane = __ffs(ballot_result) - 1;
+
+    // Mask of lanes before this one
+    unsigned mask_before = ballot_result & ((1U << lane_id) - 1);
+    // Count how many threads are active before this one
+    unsigned int local_rank = __popc(mask_before);
+    int warp_base_offset = 0;
+    if (lane_id == leader_lane) {
+        warp_base_offset = atomicAdd(counter, __popc(ballot_result));
+    }
+    unsigned int base_index = __shfl_sync(ballot_result, warp_base_offset, leader_lane);
+    position = base_index + local_rank;
+    return true;
+  }
+
+
+//     // Get leader thread in warp
+//     int leader = __ffs(active) - 1;
+
+//     // Leader does atomicAdd
+//     int base_index = 0;
+//     if (lane_id == leader) {
+//         base_index = atomicAdd(counter, num_active);
+//     }
+
+//     // Broadcast base_index to all threads in the warp
+//     base_index = __shfl_sync(mask, base_index, leader);
+
+//     // Compute per-thread index
+//     int thread_offset = __popc(active & ((1u << lane_id) - 1));
+//     int index = base_index + thread_offset;
+
+//     // Store value to list at computed index
+//     list[index] = value;
+
+//     return true;
+// }
 
 
 __device__ inline unsigned warp_mask() { return __activemask(); }
@@ -965,8 +1018,8 @@ __global__ void process_transport_step_kernel_soa(
     // double warp_total_abs_E = warp_reduce_sum(absorbed_E + (event_type == GPU_KILLED ? next_E : 0.0));
     // double warp_total_track_E = warp_reduce_sum(track_E_contrib);
 
-    // warp_atomic_add(&cell_tallies[local_cell_index].abs_E, absorbed_E + (event_type == GPU_KILLED ? next_E : 0.0));
-    // warp_atomic_add(&cell_tallies[local_cell_index].track_E, track_E_contrib);
+    warp_atomic_add(&cell_tallies[local_cell_index].abs_E, absorbed_E + (event_type == GPU_KILLED ? next_E : 0.0));
+    warp_atomic_add(&cell_tallies[local_cell_index].track_E, track_E_contrib);
 
     // // if (lane_id == (__ffs(cell_mask) -1)) {
     // if (lane_id == 0) {
@@ -974,8 +1027,8 @@ __global__ void process_transport_step_kernel_soa(
     //   atomicAdd(&cell_tallies[local_cell_index].track_E, warp_total_track_E);
     // }
 
-    atomicAdd(&cell_tallies[local_cell_index].abs_E, absorbed_E + (event_type == GPU_KILLED ? next_E : 0.0));
-    atomicAdd(&cell_tallies[local_cell_index].track_E, track_E_contrib);
+    // atomicAdd(&cell_tallies[local_cell_index].abs_E, absorbed_E + (event_type == GPU_KILLED ? next_E : 0.0));
+    // atomicAdd(&cell_tallies[local_cell_index].track_E, track_E_contrib);
 
     //  increment the counter for the determined event type and get queue position
     unsigned int queue_idx = 0;
@@ -987,6 +1040,12 @@ __global__ void process_transport_step_kernel_soa(
         default: break;
     }
     event_queue_positions[active_idx] = atomicAdd(&event_counters[queue_idx], 1);
+    // unsigned int position = 0;
+    // warp_atomic_inc_ballot(&event_counters[0], event_type == GPU_SCATTER, position);
+    // warp_atomic_inc_ballot(&event_counters[1], event_type == GPU_BOUNDARY, position);
+    // warp_atomic_inc_ballot(&event_counters[2], event_type == GPU_CENSUS, position);
+    // warp_atomic_inc_ballot(&event_counters[3], event_type == GPU_KILLED, position);
+    // event_queue_positions[active_idx] = position;
   }
 
 __global__ void partition_photons_kernel_soa(
