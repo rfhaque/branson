@@ -826,55 +826,149 @@ __global__ void reset_atomic_counters_kernel(unsigned int* counters, int num_cou
 // SoA GPU Event Kernels                                                      //
 //----------------------------------------------------------------------------//
 
+// Template function for warp-level reduction (sum) operation
 template <typename T>
 __device__ inline T warp_reduce_sum(T val, unsigned int mask) {
-  // unsigned int mask = __activemask();
-  for (int offset = 16; offset > 0; offset /= 2) {
-    val += __shfl_down_sync(mask, val, offset);
-  }
-  // return val;
-  return __shfl_sync(mask, val, __ffs(mask) -1);
-}
+    // Get the size of the warp (usually 32, but could be different in future architectures)
+    const unsigned int FULL_WARP = __activemask();
+    const int warp_size = __popc(FULL_WARP);
 
-__device__ inline void warp_atomic_add(double* address, double val) {
-  unsigned int match_mask = __match_any_sync(__activemask(), (unsigned long long)address);
-  double subgroup_sum = warp_reduce_sum(val, match_mask);
-  unsigned int lane_id = __lane_id();
-  if (match_mask != 0) {  // Ensure match_mask is not zero
-    unsigned int leader_lane = __ffs(match_mask) - 1;
-    if (lane_id == leader_lane) {
-      atomicAdd(address, subgroup_sum);
+    // Perform warp-level reduction using shuffle operations
+    for (int offset = warp_size / 2; offset > 0; offset /= 2) {
+        // Add values from other threads within the warp
+        val += __shfl_down_sync(mask, val, offset);
     }
-  }
+
+    // Find the ID of the first active thread in the group
+    int first_lane = __ffs(mask) - 1;
+
+    // Return the final sum from the first active thread in the warp
+    return __shfl_sync(mask, val, first_lane);
 }
 
 
-__device__ inline bool warp_atomic_inc_ballot(unsigned int* counter, bool pred, unsigned int& position) {
+// Function to perform atomic addition within a warp
+// __device__ inline void warp_atomic_add(double *address, uint32_t cell_idx, double val) {
+//     // Get the mask of active threads in the warp
+//     const unsigned int active_mask = __activemask();
+//     // Get the mask of threads with matching cell_idx
+//     const unsigned int group_mask = __match_any_sync(active_mask, cell_idx);
+//     // Perform warp-level reduction sum for the matching threads
+//     double subgroup_sum = warp_reduce_sum(val, group_mask);
+//     // Check if the current thread is the leader of the matching group
+//     // Determine if the current thread is the leader of its group
 
-    unsigned int ballot_result = __ballot_sync(__activemask(), pred);
-    if (!pred) {
-      return false;
-    }
-    // Constants
+//     // Calculate the lane ID within the warp (0-31)
+//     unsigned int lane_id = threadIdx.x % 32;
+
+//     // Create a mask with only the bit corresponding to this thread's lane ID set to 1
+//     unsigned int thread_mask = 1u << lane_id;
+
+//     // Check if this thread's bit is set in the group_mask
+//     // If true, this thread is part of the group with matching cell_idx
+//     bool is_thread_in_group = (group_mask & thread_mask) != 0;
+
+//     // Find the lane ID of the first active thread in the group
+//     // __ffs finds the 1-based index of the least significant set bit, so we subtract 1
+//     unsigned int first_active_lane = __ffs(group_mask) - 1;
+
+//     // Determine if this thread is the leader:
+//     // It must be part of the group and have the lowest lane ID among group members
+//     const bool is_leader = is_thread_in_group && (lane_id == first_active_lane);
+
+//     // If the current thread is the leader, perform atomic addition
+//     if (is_leader) {
+//         atomicAdd(address, subgroup_sum);
+//     }
+// }
+
+// __device__ inline void warp_atomic_add(double *address, uint32_t cell_idx, double val) {
+//     // Get the mask of active threads in the warp
+//     const unsigned int active_mask = __activemask();
+    
+//     // Get the mask of threads with matching cell_idx
+//     const unsigned int group_mask = __match_any_sync(active_mask, cell_idx);
+    
+//     // Calculate the lane ID within the warp (0-31)
+//     unsigned int lane_id = threadIdx.x % 32;
+    
+//     // Create a mask with only the bit corresponding to this thread's lane ID set to 1
+//     unsigned int thread_mask = 1u << lane_id;
+    
+//     // Check if this thread's bit is set in the group_mask
+//     bool is_thread_in_group = (group_mask & thread_mask) != 0;
+    
+//     if (is_thread_in_group) {
+//         // Perform warp-level reduction sum for the matching threads
+//         double subgroup_sum = warp_reduce_sum(val, group_mask);
+        
+//         // Find the lane ID of the first active thread in the group
+//         unsigned int first_active_lane = __ffs(group_mask) - 1;
+        
+//         // If this thread is the leader of the group, perform the atomic addition
+//         if (lane_id == first_active_lane) {
+//             atomicAdd(address, subgroup_sum);
+//         }
+//     }
+// }
+
+__device__ inline void warp_atomic_add(double *address, uint32_t cell_idx, double val) {
+    // Get the mask of active threads in the warp
+    const unsigned int active_mask = __activemask();
+    
+    // Get the mask of threads with matching cell_idx
+    const unsigned int group_mask = __match_any_sync(active_mask, cell_idx);
+    
+    // Calculate the lane ID within the warp (0-31)
     unsigned int lane_id = threadIdx.x % 32;
 
-    // Get active threads in warp
+    int first_lane = __ffs(group_mask) - 1;
+
+    double subgroup_sum = 0.0;
+    for (int i = 0; i < 32; i++) {
+      if ((group_mask >> i) & 1) {
+        subgroup_sum += __shfl_sync(group_mask, val, i);
+      }
+    }
+    if (lane_id == first_lane) {
+      atomicAdd(address, subgroup_sum);
+    }
+}
+
+// Function to perform warp-level atomic increment with ballot
+__device__ inline bool warp_atomic_inc_ballot(unsigned int* counter, bool pred, unsigned int& position) {
+    // Perform ballot operation to get a mask of threads satisfying the predicate
+    unsigned int ballot_result = __ballot_sync(__activemask(), pred);
+    // If the current thread doesn't satisfy the predicate, return false
+    if (!pred) {
+        return false;
+    }
+    // Get the lane ID within the warp
+    unsigned int lane_id = threadIdx.x % 32;
+
+    // Get the mask of active threads in the warp
     unsigned int active = __ballot_sync(__activemask(), true);
+    // Count the number of active threads
     int num_active = __popc(active);
+    // Find the ID of the first active thread (leader)
     unsigned int leader_lane = __ffs(ballot_result) - 1;
 
-    // Mask of lanes before this one
+    // Create a mask of threads before the current one
     unsigned mask_before = ballot_result & ((1U << lane_id) - 1);
     // Count how many threads are active before this one
     unsigned int local_rank = __popc(mask_before);
+    
     int warp_base_offset = 0;
+    // If this is the leader thread, perform atomic addition to get the base offset
     if (lane_id == leader_lane) {
         warp_base_offset = atomicAdd(counter, __popc(ballot_result));
     }
+    // Broadcast the base offset to all threads in the warp
     unsigned int base_index = __shfl_sync(ballot_result, warp_base_offset, leader_lane);
+    // Calculate the final position for this thread
     position = base_index + local_rank;
     return true;
-  }
+}
 
 
 //     // Get leader thread in warp
@@ -1018,8 +1112,8 @@ __global__ void process_transport_step_kernel_soa(
     // double warp_total_abs_E = warp_reduce_sum(absorbed_E + (event_type == GPU_KILLED ? next_E : 0.0));
     // double warp_total_track_E = warp_reduce_sum(track_E_contrib);
 
-    warp_atomic_add(&cell_tallies[local_cell_index].abs_E, absorbed_E + (event_type == GPU_KILLED ? next_E : 0.0));
-    warp_atomic_add(&cell_tallies[local_cell_index].track_E, track_E_contrib);
+    warp_atomic_add(&cell_tallies[local_cell_index].abs_E, local_cell_index, absorbed_E + (event_type == GPU_KILLED ? next_E : 0.0));
+    warp_atomic_add(&cell_tallies[local_cell_index].track_E, local_cell_index, track_E_contrib);
 
     // // if (lane_id == (__ffs(cell_mask) -1)) {
     // if (lane_id == 0) {
@@ -1031,21 +1125,21 @@ __global__ void process_transport_step_kernel_soa(
     // atomicAdd(&cell_tallies[local_cell_index].track_E, track_E_contrib);
 
     //  increment the counter for the determined event type and get queue position
-    unsigned int queue_idx = 0;
-    switch(event_type) {
-        case GPU_SCATTER:  queue_idx = 0; break;
-        case GPU_BOUNDARY: queue_idx = 1; break;
-        case GPU_CENSUS:   queue_idx = 2; break;
-        case GPU_KILLED:   queue_idx = 3; break;
-        default: break;
-    }
-    event_queue_positions[active_idx] = atomicAdd(&event_counters[queue_idx], 1);
-    // unsigned int position = 0;
-    // warp_atomic_inc_ballot(&event_counters[0], event_type == GPU_SCATTER, position);
-    // warp_atomic_inc_ballot(&event_counters[1], event_type == GPU_BOUNDARY, position);
-    // warp_atomic_inc_ballot(&event_counters[2], event_type == GPU_CENSUS, position);
-    // warp_atomic_inc_ballot(&event_counters[3], event_type == GPU_KILLED, position);
-    // event_queue_positions[active_idx] = position;
+    // unsigned int queue_idx = 0;
+    // switch(event_type) {
+    //     case GPU_SCATTER:  queue_idx = 0; break;
+    //     case GPU_BOUNDARY: queue_idx = 1; break;
+    //     case GPU_CENSUS:   queue_idx = 2; break;
+    //     case GPU_KILLED:   queue_idx = 3; break;
+    //     default: break;
+    // }
+    // event_queue_positions[active_idx] = atomicAdd(&event_counters[queue_idx], 1);
+    unsigned int position = 0;
+    warp_atomic_inc_ballot(&event_counters[0], event_type == GPU_SCATTER, position);
+    warp_atomic_inc_ballot(&event_counters[1], event_type == GPU_BOUNDARY, position);
+    warp_atomic_inc_ballot(&event_counters[2], event_type == GPU_CENSUS, position);
+    warp_atomic_inc_ballot(&event_counters[3], event_type == GPU_KILLED, position);
+    event_queue_positions[active_idx] = position;
   }
 
 __global__ void partition_photons_kernel_soa(
