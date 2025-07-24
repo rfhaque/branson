@@ -815,7 +815,7 @@ struct EventInfo
 };
 
 // Kernel to reset atomic counters
-__global__ void reset_atomic_counters_kernel(unsigned int* counters, int num_counters) {
+GPU_KERNEL void reset_atomic_counters_kernel(unsigned int* counters, int num_counters) {
     int idx = threadIdx.x + blockIdx.x * blockDim.x;
     if (idx < num_counters) {
         counters[idx] = 0;
@@ -828,7 +828,7 @@ __global__ void reset_atomic_counters_kernel(unsigned int* counters, int num_cou
 
 // Template function for warp-level reduction (sum) operation
 template <typename T>
-__device__ inline T warp_reduce_sum(T val, unsigned int mask) {
+GPU_DEVICE inline T warp_reduce_sum(T val, unsigned int mask) {
     // Get the size of the warp (usually 32, but could be different in future architectures)
     const unsigned int FULL_WARP = __activemask();
     const int warp_size = __popc(FULL_WARP);
@@ -836,7 +836,7 @@ __device__ inline T warp_reduce_sum(T val, unsigned int mask) {
     // Perform warp-level reduction using shuffle operations
     for (int offset = warp_size / 2; offset > 0; offset /= 2) {
         // Add values from other threads within the warp
-        val += __shfl_down_sync(mask, val, offset);
+        val += __shfl_xor_sync(mask, val, offset);
     }
 
     // Find the ID of the first active thread in the group
@@ -882,37 +882,8 @@ __device__ inline T warp_reduce_sum(T val, unsigned int mask) {
 //     }
 // }
 
-// __device__ inline void warp_atomic_add(double *address, uint32_t cell_idx, double val) {
-//     // Get the mask of active threads in the warp
-//     const unsigned int active_mask = __activemask();
-    
-//     // Get the mask of threads with matching cell_idx
-//     const unsigned int group_mask = __match_any_sync(active_mask, cell_idx);
-    
-//     // Calculate the lane ID within the warp (0-31)
-//     unsigned int lane_id = threadIdx.x % 32;
-    
-//     // Create a mask with only the bit corresponding to this thread's lane ID set to 1
-//     unsigned int thread_mask = 1u << lane_id;
-    
-//     // Check if this thread's bit is set in the group_mask
-//     bool is_thread_in_group = (group_mask & thread_mask) != 0;
-    
-//     if (is_thread_in_group) {
-//         // Perform warp-level reduction sum for the matching threads
-//         double subgroup_sum = warp_reduce_sum(val, group_mask);
-        
-//         // Find the lane ID of the first active thread in the group
-//         unsigned int first_active_lane = __ffs(group_mask) - 1;
-        
-//         // If this thread is the leader of the group, perform the atomic addition
-//         if (lane_id == first_active_lane) {
-//             atomicAdd(address, subgroup_sum);
-//         }
-//     }
-// }
 
-__device__ inline void warp_atomic_add(double *address, uint32_t cell_idx, double val) {
+GPU_DEVICE inline void warp_atomic_add(double *address, uint32_t cell_idx, double val) {
     // Get the mask of active threads in the warp
     const unsigned int active_mask = __activemask();
     
@@ -925,6 +896,7 @@ __device__ inline void warp_atomic_add(double *address, uint32_t cell_idx, doubl
     int first_lane = __ffs(group_mask) - 1;
 
     double subgroup_sum = 0.0;
+    #pragma unroll
     for (int i = 0; i < 32; i++) {
       if ((group_mask >> i) & 1) {
         subgroup_sum += __shfl_sync(group_mask, val, i);
@@ -935,8 +907,11 @@ __device__ inline void warp_atomic_add(double *address, uint32_t cell_idx, doubl
     }
 }
 
+
+
+
 // Function to perform warp-level atomic increment with ballot
-__device__ inline bool warp_atomic_inc_ballot(unsigned int* counter, bool pred, unsigned int& position) {
+GPU_DEVICE inline bool warp_atomic_inc_ballot(unsigned int* counter, bool pred, unsigned int& position) {
     // Perform ballot operation to get a mask of threads satisfying the predicate
     unsigned int ballot_result = __ballot_sync(__activemask(), pred);
     // If the current thread doesn't satisfy the predicate, return false
@@ -971,35 +946,7 @@ __device__ inline bool warp_atomic_inc_ballot(unsigned int* counter, bool pred, 
 }
 
 
-//     // Get leader thread in warp
-//     int leader = __ffs(active) - 1;
-
-//     // Leader does atomicAdd
-//     int base_index = 0;
-//     if (lane_id == leader) {
-//         base_index = atomicAdd(counter, num_active);
-//     }
-
-//     // Broadcast base_index to all threads in the warp
-//     base_index = __shfl_sync(mask, base_index, leader);
-
-//     // Compute per-thread index
-//     int thread_offset = __popc(active & ((1u << lane_id) - 1));
-//     int index = base_index + thread_offset;
-
-//     // Store value to list at computed index
-//     list[index] = value;
-
-//     return true;
-// }
-
-
-__device__ inline unsigned warp_mask() { return __activemask(); }
-
-
-
-
-__global__ void precompute_data_gpu(const uint32_t rank_cell_offset,
+GPU_KERNEL void precompute_data_gpu(const uint32_t rank_cell_offset,
   const uint32_t* active_indices, 
   uint32_t active_count,
   const uint32_t* group,
@@ -1027,7 +974,7 @@ __global__ void precompute_data_gpu(const uint32_t rank_cell_offset,
 }
 
 
-__global__ void process_transport_step_kernel_soa(
+GPU_KERNEL void process_transport_step_kernel_soa(
     const uint32_t rank_cell_offset,
     uint32_t* cell_ID, uint32_t* group, unsigned char* descriptors,
     std::array<double, 3>* pos, std::array<double, 3>* angle,
@@ -1142,7 +1089,7 @@ __global__ void process_transport_step_kernel_soa(
     event_queue_positions[active_idx] = position;
   }
 
-__global__ void partition_photons_kernel_soa(
+GPU_KERNEL void partition_photons_kernel_soa(
     const uint32_t* active_indices,       
     uint32_t active_count,
     const GPUEventType* final_event_types,
@@ -1168,7 +1115,7 @@ __global__ void partition_photons_kernel_soa(
     }
 }
 
-__global__ void process_scatter_kernel_soa(
+GPU_KERNEL void process_scatter_kernel_soa(
     uint32_t* group, unsigned char* descriptors, std::array<double, 3>* angle, RNG* rng_array,
     const uint32_t* cell_ID, 
     const Cell* cells,
@@ -1204,7 +1151,7 @@ __global__ void process_scatter_kernel_soa(
 }
 
 
-__global__ void process_boundary_kernel_soa(
+GPU_KERNEL void process_boundary_kernel_soa(
     uint32_t* cell_ID, unsigned char* descriptors, std::array<double, 3>* angle,
     const std::array<double, 3>* pos, 
     const Cell* cells,
@@ -1251,7 +1198,7 @@ __global__ void process_boundary_kernel_soa(
     }
 }
 
-__global__ void process_census_kernel_soa(
+GPU_KERNEL void process_census_kernel_soa(
     unsigned char* descriptors, 
     const EventInfo* census_info, 
     const unsigned int* event_counters)
@@ -1275,7 +1222,7 @@ __global__ void process_killed_kernel_soa(
     if (killed_idx >= killed_count) return;
 }
 
-__global__ void compact_active_list_kernel_soa(
+GPU_KERNEL void compact_active_list_kernel_soa(
     const unsigned char* descriptors,      
     const uint32_t* current_active_indices, 
     uint32_t current_active_count,

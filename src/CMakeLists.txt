@@ -130,8 +130,8 @@ elseif( CMAKE_CXX_COMPILER_ID STREQUAL "Intel" )
 	set(CMAKE_CXX_FLAGS_RELEASE "-g -O3 -xhost -qopenmp -qopt-zmm-usage=high -fp-speculation=fast -qopt-report=3 -qopt-report-file=runAVX512.optrpt -no-vec") # "-no-vec" to disable vectorization
 elseif (CMAKE_CXX_COMPILER_ID STREQUAL "IntelLLVM")
   set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g -Wall -O0 -xhost -qopenmp")
-	set(CMAKE_CXX_FLAGS_RELEASE "-g ") # "-no-vec" to disable vectorization
-	# set(CMAKE_CXX_FLAGS_RELEASE "-g -O3 -xhost -qopenmp -qopt-zmm-usage=high -fp-speculation=fast -qopt-report=3 -qopt-report-file=runAVX512.optrpt") # "-no-vec" to disable vectorization
+	#set(CMAKE_CXX_FLAGS_RELEASE "-g ") # "-no-vec" to disable vectorization
+	 set(CMAKE_CXX_FLAGS_RELEASE "-g -O3 -xhost -qopenmp -qopt-zmm-usage=high -fp-speculation=fast -qopt-report=3 -qopt-report-file=runAVX512.optrpt") # "-no-vec" to disable vectorization
 
   elseif( CMAKE_CXX_COMPILER_ID STREQUAL "Cray" )
   set( CMAKE_C_FLAGS   "${CMAKE_C_FLAGS} -g -DR123_USE_GNU_UINT128=0")
@@ -221,9 +221,9 @@ if("${GPU_DBS_STRING}" STREQUAL "CUDA" )
   message("Setting CUDA compiler options")
   #set_target_properties(BRANSON PROPERTIES CUDA_ARCHITECTURES "90") # H100
   set_target_properties(BRANSON PROPERTIES CUDA_ARCHITECTURES "70") # V100
-  # set_target_properties(BRANSON PROPERTIES CUDA_ARCHITECTURES "80") # A100
+  #set_target_properties(BRANSON PROPERTIES CUDA_ARCHITECTURES "80") # A100
   set_target_properties(BRANSON PROPERTIES CUDA_STANDARD 17)
-  string(APPEND CMAKE_CUDA_FLAGS " -g --expt-relaxed-constexpr --fmad=false")
+  string(APPEND CMAKE_CUDA_FLAGS " -g --expt-relaxed-constexpr --fmad=false -lineinfo")
   string(APPEND CMAKE_CUDA_FLAGS " --expt-extended-lambda"  )
   set_source_files_properties("main.cc" PROPERTIES LANGUAGE CUDA)
 elseif("${GPU_DBS_STRING}" STREQUAL "HIP" )

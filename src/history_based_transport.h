@@ -393,6 +393,29 @@ void transport_photon_history_aos_gpu(const uint32_t rank_cell_offset,
   } // end while alive
 }
 
+__device__ inline void warp_atomic_addh(double *address, uint32_t cell_idx, double val) {
+    // Get the mask of active threads in the warp
+    const unsigned int active_mask = __activemask();
+    
+    // Get the mask of threads with matching cell_idx
+    const unsigned int group_mask = __match_any_sync(active_mask, cell_idx);
+    
+    // Calculate the lane ID within the warp (0-31)
+    unsigned int lane_id = threadIdx.x % 32;
+
+    int first_lane = __ffs(group_mask) - 1;
+
+    double subgroup_sum = 0.0;
+    for (int i = 0; i < 32; i++) {
+      if ((group_mask >> i) & 1) {
+        subgroup_sum += __shfl_sync(group_mask, val, i);
+      }
+    }
+    if (lane_id == first_lane) {
+      atomicAdd(address, subgroup_sum);
+    }
+}
+
 //----------------------------------------------------------------------------//
 // SoA Transport Function (GPU Device)
 //----------------------------------------------------------------------------//
@@ -459,8 +482,12 @@ void transport_photon_history_soa_gpu(const uint32_t rank_cell_offset,
     if (E_ptr[i] / E0_ptr[i] < Constants::cutoff_fraction) {
       thread_absorbed_E += E_ptr[i];
 #ifdef USE_CUDA // Use atomicAdd for GPU tallies
-      atomicAdd(&cell_tallies[local_cell_index].abs_E, thread_absorbed_E);
-      atomicAdd(&cell_tallies[local_cell_index].track_E, thread_track_E);
+      // atomicAdd(&cell_tallies[local_cell_index].abs_E, thread_absorbed_E);
+      // atomicAdd(&cell_tallies[local_cell_index].track_E, thread_track_E);
+    warp_atomic_addh(&cell_tallies[local_cell_index].abs_E, local_cell_index, thread_absorbed_E); //+ (event_type == GPU_KILLED ? next_E : 0.0));
+    warp_atomic_addh(&cell_tallies[local_cell_index].track_E, local_cell_index, thread_track_E);
+
+
 #else
       cell_tallies[local_cell_index].accumulate_absorbed_E(thread_absorbed_E);
       cell_tallies[local_cell_index].accumulate_track_E(thread_track_E);
@@ -482,8 +509,10 @@ void transport_photon_history_soa_gpu(const uint32_t rank_cell_offset,
         auto boundary_event = cell->get_bc(surface_cross);
         if (boundary_event == Constants::ELEMENT) {
 #ifdef USE_CUDA
-          atomicAdd(&cell_tallies[local_cell_index].abs_E, thread_absorbed_E);
-          atomicAdd(&cell_tallies[local_cell_index].track_E, thread_track_E);
+          // atomicAdd(&cell_tallies[local_cell_index].abs_E, thread_absorbed_E);
+          // atomicAdd(&cell_tallies[local_cell_index].track_E, thread_track_E);
+          warp_atomic_addh(&cell_tallies[local_cell_index].abs_E, local_cell_index, thread_absorbed_E); //+ (event_type == GPU_KILLED ? next_E : 0.0));
+          warp_atomic_addh(&cell_tallies[local_cell_index].track_E, local_cell_index, thread_track_E);
 #else
           cell_tallies[local_cell_index].accumulate_absorbed_E(thread_absorbed_E);
           cell_tallies[local_cell_index].accumulate_track_E(thread_track_E);
@@ -499,8 +528,10 @@ void transport_photon_history_soa_gpu(const uint32_t rank_cell_offset,
           cell_ID_ptr[i] = cell->get_next_cell(surface_cross);
           descriptors_ptr[i] = static_cast<unsigned char>(Constants::PASS);
 #ifdef USE_CUDA
-          atomicAdd(&cell_tallies[local_cell_index].abs_E, thread_absorbed_E);
-          atomicAdd(&cell_tallies[local_cell_index].track_E, thread_track_E);
+          // atomicAdd(&cell_tallies[local_cell_index].abs_E, thread_absorbed_E);
+          // atomicAdd(&cell_tallies[local_cell_index].track_E, thread_track_E);
+          warp_atomic_addh(&cell_tallies[local_cell_index].abs_E, local_cell_index, thread_absorbed_E); //+ (event_type == GPU_KILLED ? next_E : 0.0));
+          warp_atomic_addh(&cell_tallies[local_cell_index].track_E, local_cell_index, thread_track_E);
 #else
           cell_tallies[local_cell_index].accumulate_absorbed_E(thread_absorbed_E);
           cell_tallies[local_cell_index].accumulate_track_E(thread_track_E);
@@ -509,8 +540,10 @@ void transport_photon_history_soa_gpu(const uint32_t rank_cell_offset,
           active = false;
           descriptors_ptr[i] = static_cast<unsigned char>(Constants::EXIT);
 #ifdef USE_CUDA
-          atomicAdd(&cell_tallies[local_cell_index].abs_E, thread_absorbed_E);
-          atomicAdd(&cell_tallies[local_cell_index].track_E, thread_track_E);
+          // atomicAdd(&cell_tallies[local_cell_index].abs_E, thread_absorbed_E);
+          // atomicAdd(&cell_tallies[local_cell_index].track_E, thread_track_E);
+          warp_atomic_addh(&cell_tallies[local_cell_index].abs_E, local_cell_index, thread_absorbed_E); //+ (event_type == GPU_KILLED ? next_E : 0.0));
+          warp_atomic_addh(&cell_tallies[local_cell_index].track_E, local_cell_index, thread_track_E);
 #else
           cell_tallies[local_cell_index].accumulate_absorbed_E(thread_absorbed_E);
           cell_tallies[local_cell_index].accumulate_track_E(thread_track_E);
@@ -526,8 +559,10 @@ void transport_photon_history_soa_gpu(const uint32_t rank_cell_offset,
         active = false;
         descriptors_ptr[i] = static_cast<unsigned char>(Constants::CENSUS);
 #ifdef USE_CUDA
-        atomicAdd(&cell_tallies[local_cell_index].abs_E, thread_absorbed_E);
-        atomicAdd(&cell_tallies[local_cell_index].track_E, thread_track_E);
+        // atomicAdd(&cell_tallies[local_cell_index].abs_E, thread_absorbed_E);
+        // atomicAdd(&cell_tallies[local_cell_index].track_E, thread_track_E);
+        warp_atomic_addh(&cell_tallies[local_cell_index].abs_E, local_cell_index, thread_absorbed_E); //+ (event_type == GPU_KILLED ? next_E : 0.0));
+        warp_atomic_addh(&cell_tallies[local_cell_index].track_E, local_cell_index, thread_track_E);
 #else
         cell_tallies[local_cell_index].accumulate_absorbed_E(thread_absorbed_E);
         cell_tallies[local_cell_index].accumulate_track_E(thread_track_E);
