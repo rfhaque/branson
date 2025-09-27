@@ -45,7 +45,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #endif
 
 #ifdef __powerpc__
-#include <ppu_intrinsics.h>
+//#include <ppu_intrinsics.h>
 #endif
 
 #ifndef R123_STATIC_INLINE
