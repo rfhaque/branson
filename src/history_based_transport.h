@@ -387,7 +387,7 @@ void gpu_transport_photons(const uint32_t rank_cell_offset,
                  Constants::n_threads_per_block;
 
   auto sync_error = cudaDeviceSynchronize();
-  if(!sync_error) std::cout<<"ERROR: <GPU_Type>DeviceSynchronize"<<std::endl;
+  if(sync_error != cudaSuccess) std::cout << "ERROR: <GPU_Type>DeviceSynchronize (pre-kernel): " << sync_error << std::endl;
 
   std::cout << "Launching with " << n_blocks << " blocks and ";
   std::cout << n_batch_photons << " photons" << std::endl;
@@ -396,7 +396,7 @@ void gpu_transport_photons(const uint32_t rank_cell_offset,
 
   Insist(!(cudaGetLastError()), "CUDA error in transport kernel launch");
   sync_error = cudaDeviceSynchronize();
-  if(!sync_error) std::cout<<"ERROR: <GPU_Type>DeviceSynchronize"<<std::endl;
+  if(sync_error != cudaSuccess) std::cout << "ERROR: <GPU_Type>DeviceSynchronize (post-kernel): " << sync_error << std::endl;
 
   // copy particles back to host
   err = cudaMemcpy(cpu_photons.data(), device_photons_ptr, n_batch_photons * sizeof(Photon),
