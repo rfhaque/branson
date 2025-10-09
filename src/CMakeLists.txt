@@ -97,16 +97,20 @@ if(ENABLE_CUDA)
 
 elseif(ENABLE_HIP)
   enable_language(CXX)
+
+  message("Making GPU(CUDA) BRANSON ${ROCM_PATH}")
+  set(CMAKE_MODULE_PATH "${ROCM_PATH}/lib/cmake " ${CMAKE_MODULE_PATH})
+  list(APPEND CMAKE_PREFIX_PATH "${ROCM_PATH}/lib/cmake")
+
+  find_package(hip REQUIRED)
+  list(APPEND branson_deps
+    hip::host
+    hip::device)
+
   include(CheckLanguage)
   check_language(HIP)
 
   set(CMAKE_HIP_HOST_COMPILER ${CMAKE_CXX_COMPILER})
-
-  if(NOT CMAKE_HIP_COMPILER)
-    message(FATAL_ERROR
-      "Unable to find the HIP compiler. Please use "
-      "CMAKE_HIP_COMPILER to provide the path to hipcc or clang++ with HIP support.")
-  endif()
 
   enable_language(HIP)
   set(CMAKE_HIP_STANDARD ${CMAKE_CXX_STANDARD})
@@ -117,13 +121,7 @@ elseif(ENABLE_HIP)
   list(APPEND CMAKE_BRANSON_CXXFLAGS -DUSE_GPU)
   list(APPEND CMAKE_BRANSON_CXXFLAGS -DHAS_GPU)
 
-  find_package(hip REQUIRED)
-
   set(GPU_DBS_STRING "HIP" CACHE STRING "If HIP is available, this variable is 'HIP'")
-
-  list(APPEND branson_deps
-    hip::host
-    hip::device)
 
   message("Making GPU(HIP) BRANSON")
 
