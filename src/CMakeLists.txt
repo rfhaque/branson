@@ -98,8 +98,16 @@ if(ENABLE_CUDA)
 elseif(ENABLE_HIP)
   enable_language(CXX)
 
-  message("Making GPU(CUDA) BRANSON ${ROCM_PATH}")
-  set(CMAKE_MODULE_PATH "${ROCM_PATH}/lib/cmake " ${CMAKE_MODULE_PATH})
+  if(NOT ROCM_PATH)
+    if(DEFINED ENV{ROCM_PATH})
+      set(ROCM_PATH $ENV{ROCM_PATH} CACHE PATH "Path to which ROCM has been installed")
+    else()
+      message(FATAL_ERROR "Unable to find rocm. Please use "
+                          "ROCM_PATH to provide the rocm installation.")
+    endif()
+  endif()
+  
+  set(CMAKE_HIP_COMPILER "${ROCM_PATH}/llvm/bin/clang++")
   list(APPEND CMAKE_PREFIX_PATH "${ROCM_PATH}/lib/cmake")
 
   find_package(hip REQUIRED)
