@@ -86,7 +86,6 @@ if(ENABLE_CUDA)
   set(CMAKE_CUDA_STANDARD_REQUIRED ON)
   set(CMAKE_CUDA_ARCHITECTURES "${CUDA_ARCH}")
   set_source_files_properties("main.cc" PROPERTIES LANGUAGE CUDA)
-  set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Xptxas -v")
   set(CMAKE_CUDA_FLAGS "-g --expt-relaxed-constexpr ${CMAKE_CUDA_FLAGS}")
   set(CMAKE_CUDA_FLAGS "-expt-extended-lambda ${CMAKE_CUDA_FLAGS}")
   list(APPEND CMAKE_BRANSON_CXXFLAGS -DUSE_GPU)
@@ -151,7 +150,6 @@ elseif(ENABLE_HIP)
   set_target_properties(hip::device PROPERTIES INTERFACE_LINK_LIBRARIES "hip::host")
 
   list(APPEND branson_deps
-    "-fgpu-rdc"
     "--hip-link"
     "--offload-arch=${HIP_ARCH}"
     "--rocm-path=${ROCM_PATH}"
@@ -161,7 +159,6 @@ elseif(ENABLE_HIP)
   list(APPEND CMAKE_BRANSON_CXXFLAGS -DHAS_GPU)
   list(APPEND CMAKE_BRANSON_CXXFLAGS -x hip)
   list(APPEND CMAKE_BRANSON_CXXFLAGS "--offload-arch=${HIP_ARCH}")
-  list(APPEND CMAKE_BRANSON_CXXFLAGS "-fgpu-rdc")
   list(APPEND CMAKE_BRANSON_CXXFLAGS "-Wno-unused-result")
 
   #set_source_files_properties("main.cc" PROPERTIES LANGUAGE HIP)
@@ -371,20 +368,6 @@ add_executable(BRANSON main.cc ${headers})
 target_link_libraries(BRANSON PUBLIC ${branson_deps})
 target_include_directories(BRANSON PRIVATE
   ${CMAKE_BINARY_DIR} ${PROJECT_SOURCE_DIR}/pugixml/src/ ${HIP_INCLUDE_DIRS})
-
-if(ENABLE_CUDA)
-  set_target_properties(BRANSON
-    PROPERTIES
-      CUDA_SEPARABLE_COMPILATION ON
-      CUDA_RESOLVE_DEVICE_SYMBOLS ON)
-endif()
-
-if(ENABLE_HIP)
-  set_target_properties(BRANSON
-    PROPERTIES
-      HIP_SEPARABLE_COMPILATION ON
-      HIP_RESOLVE_DEVICE_SYMBOLS ON)
-endif()
 
 #------------------------------------------------------------------------------#
 # Targets for installation
