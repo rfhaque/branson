@@ -9,7 +9,7 @@
 # Enbable debug mode by passing -DCMAKE_BUILD_TYPE=Debug to CMake, default is
 # Release
 
-cmake_minimum_required (VERSION 3.23)
+cmake_minimum_required (VERSION 3.24)
 
 project (BRANSON
   VERSION 0.8
