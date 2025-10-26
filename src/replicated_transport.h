@@ -75,8 +75,12 @@ Census_T replicated_transport(
   if(gpu_setup.use_gpu_transporter() && gpu_available ) {
     if constexpr(std::is_same_v<Census_T, std::vector<Photon>>) {
       t_transport.start_timer("gpu transport");
+      wrapped_cali_mark_begin("gpu transport photons");
       gpu_transport_photons(rank_cell_offset, all_photons, gpu_setup.get_device_cells_ptr(), cell_tallies);
+      wrapped_cali_mark_end("gpu transport photons");
+      wrapped_cali_mark_begin("post process photons");
       auto batch_complete = post_process_photons(next_dt, all_photons, census_list, census_E, exit_E);
+      wrapped_cali_mark_end("post process photons");
       t_transport.stop_timer("gpu transport");
       std::cout<<"gpu transport time: "<<t_transport.get_time("gpu transport")<<std::endl;
     }
