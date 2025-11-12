@@ -108,10 +108,10 @@ int main(int argc, char **argv) {
 
     if (input.get_dd_mode() == PARTICLE_PASS) {
       if( input.get_particle_storage() == AOS) {
-        imc_particle_pass_driver<PhotonArray>(mesh, imc_state, imc_p, mpi_types, mpi_info);
+        imc_particle_pass_driver<std::vector<Photon>>(mesh, imc_state, imc_p, mpi_types, mpi_info);
       }
       else if(input.get_particle_storage() == SOA) {
-        imc_particle_pass_driver<std::vector<Photon>>(mesh, imc_state, imc_p, mpi_types, mpi_info);
+        imc_particle_pass_driver<PhotonArray>(mesh, imc_state, imc_p, mpi_types, mpi_info);
       }
       else {
         cout << "Driver for array currently not supported" << endl;
@@ -119,11 +119,11 @@ int main(int argc, char **argv) {
       }
     }
     else if (input.get_dd_mode() == REPLICATED) {
-      if( input.get_particle_storage() == SOA) {
-        imc_replicated_driver<PhotonArray>(mesh, imc_state, imc_p, mpi_types, mpi_info);
-      }
-      else if(input.get_particle_storage() == AOS) {
+      if(input.get_particle_storage() == AOS) {
         imc_replicated_driver<std::vector<Photon>>(mesh, imc_state, imc_p, mpi_types, mpi_info);
+      }
+      else if( input.get_particle_storage() == SOA) {
+        imc_replicated_driver<PhotonArray>(mesh, imc_state, imc_p, mpi_types, mpi_info);
       }
       else {
         cout << "Driver for array currently not supported" << endl;

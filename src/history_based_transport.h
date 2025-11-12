@@ -396,10 +396,10 @@ void transport_photon_history_aos_gpu(const uint32_t rank_cell_offset,
 __device__ inline void warp_atomic_addh(double *address, uint32_t cell_idx, double val) {
     // Get the mask of active threads in the warp
     const unsigned int active_mask = __activemask();
-    
+
     // Get the mask of threads with matching cell_idx
     const unsigned int group_mask = __match_any_sync(active_mask, cell_idx);
-    
+
     // Calculate the lane ID within the warp (0-31)
     unsigned int lane_id = threadIdx.x % 32;
 
@@ -715,8 +715,8 @@ void gpu_transport_photons(const uint32_t rank_cell_offset,
   size_t tallies_size = sizeof(Cell_Tally) * cpu_cell_tallies.size();
   err = cudaMalloc((void **)&device_cell_tallies_ptr, tallies_size);
   Insist(!err, "CUDA error allocating cell tallies");
-  err = cudaMemset(device_cell_tallies_ptr, 0, tallies_size); // Zero tallies on device
-  Insist(!err, "CUDA error zeroing cell tallies");
+  cudaMemcpy(device_cell_tallies_ptr, cpu_cell_tallies.data(), cpu_cell_tallies.size()* sizeof(Cell_Tally), cudaMemcpyHostToDevice);
+  Insist(!err, "CUDA error copying cell tallies");
 
   // Kernel settings
   int n_threads = Constants::n_threads_per_block;
@@ -798,8 +798,8 @@ void gpu_transport_photons(const uint32_t rank_cell_offset,
   size_t tallies_size = sizeof(Cell_Tally) * cpu_cell_tallies.size();
   cudaError_t err = cudaMalloc((void **)&device_cell_tallies_ptr, tallies_size);
   Insist(!err, "CUDA error allocating cell tallies");
-  err = cudaMemset(device_cell_tallies_ptr, 0, tallies_size); // Zero tallies on device
-  Insist(!err, "CUDA error zeroing cell tallies");
+  cudaMemcpy(device_cell_tallies_ptr, cpu_cell_tallies.data(), cpu_cell_tallies.size()* sizeof(Cell_Tally), cudaMemcpyHostToDevice);
+  Insist(!err, "CUDA error copying cell tallies");
 
   // Kernel settings
   int n_threads = Constants::n_threads_per_block;

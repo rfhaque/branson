@@ -14,6 +14,7 @@
 #define config_h_
 
 #include <mpi.h>
+#include <cstdint>
 
 #cmakedefine VIZ_LIBRARIES_FOUND
 #cmakedefine METIS_FOUND
