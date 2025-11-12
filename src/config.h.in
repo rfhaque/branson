@@ -14,6 +14,7 @@
 #define config_h_
 
 #include <mpi.h>
+#include <cstdint>
 
 #cmakedefine VIZ_LIBRARIES_FOUND
 #cmakedefine METIS_FOUND
@@ -30,6 +31,10 @@
 #cmakedefine BRANSON_N_GROUPS @BRANSON_N_GROUPS@
 
 #cmakedefine ENABLE_VERBOSE_GPU_TRANSPORT @ENABLE_VERBOSE_GPU_TRANSPORT@
+
+/*----------------------------------------------------------------------------*/
+/* Mark functions for compilation on host and device */
+
 
 #ifdef USE_OPENMP
 #include <omp.h>
@@ -81,17 +86,18 @@
 #endif // USE_HIP
 
 #ifdef USE_CUDA
+
 #include <cuda.h>
 #include <cuda_runtime.h>
 #include <thrust/device_vector.h>
 #include <thrust/execution_policy.h>
 #include <thrust/sort.h>
-#endif // USE_CUDA
 
-/*----------------------------------------------------------------------------*/
-/* Mark functions for compilation on host and device */
-#if defined(USE_HIP) or defined(USE_CUDA)
-#define HOST_AND_DEVICE_FUNCTION __host__ __device__
+#endif
+
+#if defined(USE_CUDA) || defined(USE_HIP)
+
+// mark functions for GPU execution
 #define GPU_HOST_DEVICE __host__ __device__
 #define GPU_DEVICE __device__
 #define GPU_KERNEL __global__
@@ -100,14 +106,12 @@
 //! Add addend to t, use atomicAdd if built on a CUDA device
 template <class T>
 GPU_HOST_DEVICE inline void accumulate(T &target, T const addend) {
-  #if defined( __HIP_DEVICE_COMPILE__) or defined(USE_CUDA)
   atomicAdd(&target, addend);
-  #endif
   return;
 }
+
 #else
 
-#define HOST_AND_DEVICE_FUNCTION
 #define GPU_HOST_DEVICE
 #define GPU_DEVICE
 #define GPU_KERNEL
@@ -118,7 +122,7 @@ template <class T> inline void accumulate(T &target, T const addend) {
   target += addend;
   return;
 }
-#endif // USE_HIP or USE_CUDA
+#endif // USE_CUDA || USE_HIP
 
 inline void Insist(const bool pass, const std::string &message) {
   if (!pass) {
