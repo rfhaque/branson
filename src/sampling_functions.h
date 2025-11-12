@@ -138,13 +138,13 @@ inline int sample_emission_group(RNG &rng, const Cell &cell_data) {
 }
 
 struct EmissionGroupData {
-  std::vector<double> cumulative_probs;
+  std::array<double, BRANSON_N_GROUPS> cumulative_probs;
   double total_probability;
 };
 
+GPU_HOST_DEVICE
 inline EmissionGroupData precompute_emission_group_data(const Cell &cell_data) {
   EmissionGroupData data;
-  data.cumulative_probs.resize(BRANSON_N_GROUPS);
   double cumulative_prob = 0.0;
   double norm_factor = 1.0 / (cell_data.get_op_a(0) * BRANSON_N_GROUPS);
   for (int i = 0; i < BRANSON_N_GROUPS; ++i) {
@@ -155,18 +155,14 @@ inline EmissionGroupData precompute_emission_group_data(const Cell &cell_data) {
   return data;
 }
 
+GPU_HOST_DEVICE
 inline int sample_emission_group(RNG &rng, const EmissionGroupData &data) {
-  constexpr int binarySearchThreshold = 10000;
   double cdf_value = rng.generate_random_number() * data.total_probability;
-  if (BRANSON_N_GROUPS >= binarySearchThreshold) {
-    return std::lower_bound(data.cumulative_probs.begin(), data.cumulative_probs.end(), cdf_value) - data.cumulative_probs.begin();
-  } else {
-    int new_group = BRANSON_N_GROUPS-1;
-    for (int i = 0; i < BRANSON_N_GROUPS; ++i) {
-        new_group = cdf_value >= data.cumulative_probs[i] ? i : new_group;
-    }
-    return new_group;
+  int new_group = BRANSON_N_GROUPS-1;
+  for (int i = 0; i < BRANSON_N_GROUPS; ++i) {
+      new_group = cdf_value >= data.cumulative_probs[i] ? i : new_group;
   }
+  return new_group;
 }
 
 

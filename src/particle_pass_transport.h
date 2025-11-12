@@ -37,7 +37,7 @@
 template <typename Census_T>
 Census_T  particle_pass_transport(
     const Mesh &mesh, const GPU_Setup &gpu_setup, const IMC_Parameters &imc_parameters, const Info &mpi_info, const MPI_Types &mpi_types,
-    IMC_State &imc_state, Message_Counter &mctr, std::vector<double> &rank_abs_E, std::vector<double> &rank_track_E, Census_T &all_photons, const int n_omp_threads) {
+    IMC_State &imc_state, Message_Counter &mctr, std::vector<double> &rank_abs_E, std::vector<double> &rank_track_E, Census_T &all_photons) {
   using std::cout;
   using std::endl;
   using std::stack;
@@ -45,7 +45,7 @@ Census_T  particle_pass_transport(
   using std::vector;
 
   // is the GPU even available?
-  #ifdef USE_GPU
+  #ifdef USE_CUDA
   constexpr bool gpu_available = true;
   #else
   constexpr bool gpu_available = false;
@@ -68,7 +68,7 @@ Census_T  particle_pass_transport(
   t_transport.start_timer("timestep_transport");
 
   // Number of particles to run between MPI communication
-  //const uint32_t batch_size = imc_parameters.get_batch_size();
+  const uint32_t dd_batch_size = imc_parameters.get_batch_size();
 
   // Preferred size of MPI message
   const uint32_t max_buffer_size = imc_parameters.get_particle_message_size();
@@ -127,9 +127,8 @@ Census_T  particle_pass_transport(
   //------------------------------------------------------------------------//
 
   Census_T census_list;    //!< End of timestep census list
-  vector<Photon> phtn_recv_list; //!< Photons from received messages
+  Census_T phtn_recv_list; //!< Photons from received messages
 
-  int send_rank;
   uint64_t n_complete = 0; //!< Completed histories, regardless of origin
   //! Send and receive buffers for complete count
   uint64_t s_global_complete, r_global_complete;
@@ -138,20 +137,10 @@ Census_T  particle_pass_transport(
   //------------------------------------------------------------------------//
   // first transport all photons from source (best for GPU)
   //------------------------------------------------------------------------//
-  std::cout<<"not doing DD right now"<<std::endl;
-  std::exit(1);
-
-  /*
-  if(gpu_setup.use_gpu_transporter() && gpu_available) {
-    gpu_transport_photons(rank_cell_offset, all_photons, gpu_setup.get_device_cells_ptr(), cell_tallies);
-  }
-  else {
-    cpu_transport_photons(rank_cell_offset, all_photons, mesh.get_cells(), cell_tallies, n_omp_threads);
-  }
-  */
-
-  auto batch_complete = post_process_photons(next_dt, all_photons, census_list, census_E, exit_E);
+  auto [batch_complete, batch_exit_E, batch_census_E] = batch_transport(next_dt, gpu_available, gpu_setup, imc_parameters, rank_cell_offset, mesh, all_photons, census_list, send_list, cell_tallies, t_transport);
   n_complete += batch_complete;
+  exit_E += batch_exit_E;
+  census_E += batch_census_E;
 
   //------------------------------------------------------------------------//
   // process photon send and receives
@@ -179,7 +168,7 @@ Census_T  particle_pass_transport(
 
       // send full photon buffers if send_list has some photons in it
       if (phtn_send_buffer[i_b].empty() && !send_list[i_b].empty()) {
-        const uint32_t n_photons_to_send = (send_list[i_b].size() < max_buffer_size) ?
+        const uint32_t n_photons_to_send = (send_list[i_b].size() <= max_buffer_size) ?
             send_list[i_b].size() : max_buffer_size;
         vector<Photon>::iterator copy_start = send_list[i_b].begin();
         vector<Photon>::iterator copy_end = send_list[i_b].begin() + n_photons_to_send;
@@ -218,40 +207,10 @@ Census_T  particle_pass_transport(
     } // end loop over adjacent processors
 
     if(!phtn_recv_list.empty()) {
-      if(gpu_setup.use_gpu_transporter() && gpu_available)
-        gpu_transport_photons(rank_cell_offset, phtn_recv_list, gpu_setup.get_device_cells_ptr(), cell_tallies);
-      else {
-        history_cpu_transport_photons(rank_cell_offset, phtn_recv_list, mesh.get_cells(), cell_tallies, n_omp_threads);
-      }
-
-      for (auto &phtn : phtn_recv_list) {
-        switch (phtn.get_descriptor()) {
-        // this case should never be reached
-        case Constants::SCATTER:
-          std::cout<<"ERROR: Should not end transport with SCATTER event"<<std::endl;
-          break;
-        case Constants::BOUND:
-          std::cout<<"ERROR: Should not end transport with BOUND event"<<std::endl;
-          break;
-        case Constants::KILLED:
-          n_complete++;
-          break;
-        case Constants::EXIT:
-          n_complete++;
-          exit_E+=phtn.get_E();
-          break;
-        case Constants::CENSUS:
-          phtn.set_distance_to_census(Constants::c*next_dt);
-          census_list.push_back(phtn);
-          census_E+=phtn.get_E();
-          n_complete++;
-          break;
-        case Constants::PASS:
-          send_rank = mesh.get_rank(phtn.get_cell());
-          int i_b = adjacent_procs[send_rank];
-          send_list[i_b].push_back(phtn);
-        }
-      }
+      auto [batch_complete, batch_exit_E, batch_census_E] = batch_transport(next_dt, gpu_available, gpu_setup, imc_parameters, rank_cell_offset, mesh, phtn_recv_list, census_list, send_list, cell_tallies, t_transport);
+      n_complete += batch_complete;
+      exit_E += batch_exit_E;
+      census_E += batch_census_E;
     }
 
     phtn_recv_list.clear();
@@ -279,7 +238,6 @@ Census_T  particle_pass_transport(
 
   // record time of transport work for this rank
   t_transport.stop_timer("timestep_transport");
-
 
   // wait for all ranks to finish then send empty photon messages, do this because it's possible
   // for a rank to receive the empty message while it's still in the transport loop. In that case, it will post a

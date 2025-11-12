@@ -45,11 +45,17 @@ public:
   //! Check to see if photon energy weight is below cutoff fraction
   GPU_HOST_DEVICE
   bool below_cutoff(const double cutoff_fraction) const {
+    // Handle potential division by zero or very small E0
+    if (m_E0 <= 1.0e-100) return true; // Consider it below cutoff if initial energy is effectively zero
     return (m_E / m_E0 < cutoff_fraction);
   }
 
   GPU_HOST_DEVICE
-  inline double get_fraction() const {return m_E/ m_E0;}
+  inline double get_fraction() const {
+      // Handle potential division by zero or very small E0
+      if (m_E0 <= 1.0e-100) return 0.0;
+      return m_E/ m_E0;
+  }
 
   //! Return global cell ID
   GPU_HOST_DEVICE
