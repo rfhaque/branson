@@ -37,7 +37,7 @@
 template <typename Census_T>
 Census_T  particle_pass_transport(
     const Mesh &mesh, const GPU_Setup &gpu_setup, const IMC_Parameters &imc_parameters, const Info &mpi_info, const MPI_Types &mpi_types,
-    IMC_State &imc_state, Message_Counter &mctr, std::vector<double> &rank_abs_E, std::vector<double> &rank_track_E, Census_T &all_photons, const int n_omp_threads, const int transport_algorithm) {
+    IMC_State &imc_state, Message_Counter &mctr, std::vector<double> &rank_abs_E, std::vector<double> &rank_track_E, Census_T &all_photons) {
   using std::cout;
   using std::endl;
   using std::stack;
@@ -69,7 +69,6 @@ Census_T  particle_pass_transport(
 
   // Number of particles to run between MPI communication
   const uint32_t dd_batch_size = imc_parameters.get_batch_size();
-  const uint32_t event_batch_size = 10000; // ARL: Fix to be input parameter but 10k is great
 
   // Preferred size of MPI message
   const uint32_t max_buffer_size = imc_parameters.get_particle_message_size();
@@ -138,7 +137,7 @@ Census_T  particle_pass_transport(
   //------------------------------------------------------------------------//
   // first transport all photons from source (best for GPU)
   //------------------------------------------------------------------------//
-  auto [batch_complete, batch_exit_E, batch_census_E] = batch_transport(next_dt, gpu_available, gpu_setup, transport_algorithm, n_omp_threads, event_batch_size, rank_cell_offset, mesh, all_photons, census_list, send_list, cell_tallies, t_transport);
+  auto [batch_complete, batch_exit_E, batch_census_E] = batch_transport(next_dt, gpu_available, gpu_setup, imc_parameters, rank_cell_offset, mesh, all_photons, census_list, send_list, cell_tallies, t_transport);
   n_complete += batch_complete;
   exit_E += batch_exit_E;
   census_E += batch_census_E;
@@ -208,7 +207,7 @@ Census_T  particle_pass_transport(
     } // end loop over adjacent processors
 
     if(!phtn_recv_list.empty()) {
-      auto [batch_complete, batch_exit_E, batch_census_E] = batch_transport(next_dt, gpu_available, gpu_setup, transport_algorithm, n_omp_threads, event_batch_size, rank_cell_offset, mesh, phtn_recv_list, census_list, send_list, cell_tallies, t_transport);
+      auto [batch_complete, batch_exit_E, batch_census_E] = batch_transport(next_dt, gpu_available, gpu_setup, imc_parameters, rank_cell_offset, mesh, phtn_recv_list, census_list, send_list, cell_tallies, t_transport);
       n_complete += batch_complete;
       exit_E += batch_exit_E;
       census_E += batch_census_E;
@@ -239,7 +238,6 @@ Census_T  particle_pass_transport(
 
   // record time of transport work for this rank
   t_transport.stop_timer("timestep_transport");
-
 
   // wait for all ranks to finish then send empty photon messages, do this because it's possible
   // for a rank to receive the empty message while it's still in the transport loop. In that case, it will post a

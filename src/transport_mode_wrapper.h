@@ -1,13 +1,9 @@
 #ifndef transport_mode_wrapper_h_
 #define transport_mode_wrapper_h_
 
-#include "buffer.h"
 #include "cell_tally.h"
-#include "constants.h"
 #include "gpu_setup.h"
-#include "info.h"
 #include "mesh.h"
-#include "message_counter.h"
 #include "photon.h"
 #include "photon_array.h"
 #include "post_process_functions.h"
@@ -17,13 +13,15 @@
 template <typename Census_T>
 std::tuple<uint64_t, double, double>
 batch_transport(const double next_dt, const bool gpu_available, const GPU_Setup &gpu_setup,
-                const int transport_algorithm, const int n_omp_threads,
-                const uint32_t event_batch_size, const uint32_t rank_cell_offset, const Mesh &mesh,
+                const IMC_Parameters &imc_parameters,
+                const uint32_t rank_cell_offset, const Mesh &mesh,
                 Census_T &all_photons, Census_T &census_list,
                 std::vector<std::vector<Photon>> &phtn_send_buffer,
                 std::vector<Cell_Tally> &cell_tallies, Timer &t_transport) {
   using std::cout;
   using std::endl;
+  auto transport_algorithm = imc_parameters.get_transport_algorithm();
+  auto n_omp_threads = imc_parameters.get_n_omp_threads();
   uint64_t n_complete = 0.0;
   double census_E{0.0};
   double exit_E{0.0};
@@ -80,6 +78,7 @@ batch_transport(const double next_dt, const bool gpu_available, const GPU_Setup 
       hardware = "CPU";
       // Call correct overloaded history_cpu_transport_photons
       // Note that both SoA and AoS can use batches here
+      auto event_batch_size = imc_parameters.get_batch_size();
       cout << "Starting CPU event-based transport (batch size: " << event_batch_size << ")..."
            << endl;
       for (size_t batch_start = 0; batch_start < all_photons.size();

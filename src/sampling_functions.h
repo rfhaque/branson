@@ -157,17 +157,12 @@ inline EmissionGroupData precompute_emission_group_data(const Cell &cell_data) {
 
 GPU_HOST_DEVICE
 inline int sample_emission_group(RNG &rng, const EmissionGroupData &data) {
-  constexpr int binarySearchThreshold = 10000;
   double cdf_value = rng.generate_random_number() * data.total_probability;
-  if (BRANSON_N_GROUPS >= binarySearchThreshold) {
-    return std::lower_bound(data.cumulative_probs.begin(), data.cumulative_probs.end(), cdf_value) - data.cumulative_probs.begin();
-  } else {
-    int new_group = BRANSON_N_GROUPS-1;
-    for (int i = 0; i < BRANSON_N_GROUPS; ++i) {
-        new_group = cdf_value >= data.cumulative_probs[i] ? i : new_group;
-    }
-    return new_group;
+  int new_group = BRANSON_N_GROUPS-1;
+  for (int i = 0; i < BRANSON_N_GROUPS; ++i) {
+      new_group = cdf_value >= data.cumulative_probs[i] ? i : new_group;
   }
+  return new_group;
 }
 
 

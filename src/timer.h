@@ -27,14 +27,14 @@ public:
     // start timer if new
     if (times.find(name) == times.end())
       times[name] = 0.0;
-    temp_start = std::chrono::high_resolution_clock::now();
+    start_times[name] = std::chrono::high_resolution_clock::now();
   }
 
   //! Stop timer with name (must be the last active timer)
   void stop_timer(std::string name) {
     double time_seconds =
         std::chrono::duration_cast<std::chrono::microseconds>(
-            std::chrono::high_resolution_clock::now() - temp_start)
+            std::chrono::high_resolution_clock::now() - start_times[name])
             .count() /
         1.0e6;
     times[name] += time_seconds;
@@ -51,11 +51,11 @@ public:
   double get_time(std::string name) { return times[name]; }
 
 private:
-  //! Starting time for the latest timing instance
-  std::chrono::high_resolution_clock::time_point temp_start;
 
   //! Map of timer names to times
   std::unordered_map<std::string, double> times;
+  //! Starting times for named timing instance
+  std::unordered_map<std::string, std::chrono::high_resolution_clock::time_point> start_times;
 };
 
 #endif // timer_h_

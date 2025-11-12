@@ -2,17 +2,15 @@
   <common>
     <method>IMC</method>
     <t_start>0.0</t_start>
-    <t_stop>0.01</t_stop>
+    <t_stop>0.05</t_stop>
     <dt_start>0.01</dt_start>
     <t_mult>1.0</t_mult>
     <dt_max>1.0</dt_max>
-    <photons>512000000</photons>
+    <photons>10000000</photons>
     <seed>14706</seed>
     <tilt>FALSE</tilt>
     <stratified_sampling>FALSE</stratified_sampling>
     <use_gpu_transporter>TRUE</use_gpu_transporter>
-    <particle_storage>SOA</particle_storage>
-    <particle_algorithm>EVENT</particle_algorithm>
     <dd_transport_type>REPLICATED</dd_transport_type>
     <n_omp_threads>1</n_omp_threads>
     <output_frequency>1</output_frequency>

@@ -86,7 +86,7 @@ void imc_replicated_driver(Mesh &mesh, IMC_State &imc_state,
     MPI_Barrier(MPI_COMM_WORLD);
 
     census_photons =
-        replicated_transport<Census_T>(mesh, gpu_setup, imc_state, abs_E, track_E, all_photons, imc_parameters.get_n_omp_threads(), imc_parameters.get_batch_size(), imc_parameters.get_transport_algorithm());
+        replicated_transport<Census_T>(mesh, gpu_setup, imc_state, abs_E, track_E, all_photons, imc_parameters);
 
     // reduce the abs_E and the track weighted energy (for T_r)
     MPI_Allreduce(MPI_IN_PLACE, &abs_E[0], mesh.get_n_global_cells(),
