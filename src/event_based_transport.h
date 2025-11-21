@@ -30,13 +30,11 @@
 //----------------------------------------------------------------------------//
 // GPU Specific Includes and Typedefs                                         //
 //----------------------------------------------------------------------------//
-#ifdef USE_CUDA
-#include <cuda_runtime.h>
-#include <device_launch_parameters.h>
+#ifdef USE_GPU
 
 enum GPUEventType { GPU_SCATTER, GPU_BOUNDARY, GPU_CENSUS, GPU_KILLED, GPU_PASS, GPU_EXIT, GPU_BOUND }; // Match Constants if possible
 
-#endif // USE_CUDA
+#endif // USE_GPU
 
 //----------------------------------------------------------------------------//
 // CPU Event-Based Transport Structures and Functions                         //
@@ -766,7 +764,7 @@ void cpu_event_transport_photons(const uint32_t rank_cell_offset, std::vector<Ph
 //----------------------------------------------------------------------------//
 // GPU Event-Based Transport Implementation                                   //
 //----------------------------------------------------------------------------//
-#ifdef USE_CUDA
+#ifdef USE_GPU
 
 struct EventInfo
 {
@@ -1836,7 +1834,7 @@ void gpu_event_transport_photons(const uint32_t rank_cell_offset,
 
 
 
-#endif // USE_CUDA
+#endif // USE_GPU
 
 #endif // event_based_transport_h_
 //----------------------------------------------------------------------------//
