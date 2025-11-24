@@ -111,7 +111,7 @@ Census_T replicated_transport(
 
 
   // is the GPU even available?
-#ifdef USE_CUDA
+#ifdef USE_GPU
   constexpr bool gpu_available = true;
 #else
   constexpr bool gpu_available = false;
