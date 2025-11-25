@@ -315,7 +315,7 @@ void transport_photon_history_aos_gpu(const uint32_t rank_cell_offset,
     // apply variance/runtime reduction
     if (phtn.below_cutoff(Constants::cutoff_fraction)) {
       thread_absorbed_E += phtn.get_E();
-#ifdef USE_CUDA // Use atomicAdd for GPU tallies
+#ifdef USE_GPU// Use atomicAdd for GPU tallies
       atomicAdd(&cell_tallies[local_cell_index].abs_E, thread_absorbed_E);
       atomicAdd(&cell_tallies[local_cell_index].track_E, thread_track_E);
 #else // Should not happen if GPU_DEVICE is defined correctly
@@ -338,7 +338,7 @@ void transport_photon_history_aos_gpu(const uint32_t rank_cell_offset,
       else if (dist_to_event == dist_to_boundary) {
         auto boundary_event = cell->get_bc(surface_cross);
         if (boundary_event == Constants::ELEMENT) {
-#ifdef USE_CUDA
+#ifdef USE_GPU
           atomicAdd(&cell_tallies[local_cell_index].abs_E, thread_absorbed_E);
           atomicAdd(&cell_tallies[local_cell_index].track_E, thread_track_E);
 #else
@@ -355,7 +355,7 @@ void transport_photon_history_aos_gpu(const uint32_t rank_cell_offset,
           active = false;
           phtn.set_cell(cell->get_next_cell(surface_cross));
           phtn.set_descriptor(Constants::PASS);
-#ifdef USE_CUDA
+#ifdef USE_GPU
           atomicAdd(&cell_tallies[local_cell_index].abs_E, thread_absorbed_E);
           atomicAdd(&cell_tallies[local_cell_index].track_E, thread_track_E);
 #else
@@ -365,7 +365,7 @@ void transport_photon_history_aos_gpu(const uint32_t rank_cell_offset,
         } else if (boundary_event == Constants::VACUUM || boundary_event == Constants::SOURCE) {
           active = false;
           phtn.set_descriptor(Constants::EXIT);
-#ifdef USE_CUDA
+#ifdef USE_GPU
           atomicAdd(&cell_tallies[local_cell_index].abs_E, thread_absorbed_E);
           atomicAdd(&cell_tallies[local_cell_index].track_E, thread_track_E);
 #else
@@ -381,7 +381,7 @@ void transport_photon_history_aos_gpu(const uint32_t rank_cell_offset,
       else if (dist_to_event == dist_to_census) {
         active = false;
         phtn.set_descriptor(Constants::CENSUS);
-#ifdef USE_CUDA
+#ifdef USE_GPU
         atomicAdd(&cell_tallies[local_cell_index].abs_E, thread_absorbed_E);
         atomicAdd(&cell_tallies[local_cell_index].track_E, thread_track_E);
 #else
@@ -481,7 +481,7 @@ void transport_photon_history_soa_gpu(const uint32_t rank_cell_offset,
     // apply runtime reduction
     if (E_ptr[i] / E0_ptr[i] < Constants::cutoff_fraction) {
       thread_absorbed_E += E_ptr[i];
-#ifdef USE_CUDA // Use atomicAdd for GPU tallies
+#ifdef USE_GPU // Use atomicAdd for GPU tallies
       // atomicAdd(&cell_tallies[local_cell_index].abs_E, thread_absorbed_E);
       // atomicAdd(&cell_tallies[local_cell_index].track_E, thread_track_E);
     warp_atomic_addh(&cell_tallies[local_cell_index].abs_E, local_cell_index, thread_absorbed_E); //+ (event_type == GPU_KILLED ? next_E : 0.0));
@@ -508,7 +508,7 @@ void transport_photon_history_soa_gpu(const uint32_t rank_cell_offset,
       else if (dist_to_event == dist_to_boundary) {
         auto boundary_event = cell->get_bc(surface_cross);
         if (boundary_event == Constants::ELEMENT) {
-#ifdef USE_CUDA
+#ifdef USE_GPU
           // atomicAdd(&cell_tallies[local_cell_index].abs_E, thread_absorbed_E);
           // atomicAdd(&cell_tallies[local_cell_index].track_E, thread_track_E);
           warp_atomic_addh(&cell_tallies[local_cell_index].abs_E, local_cell_index, thread_absorbed_E); //+ (event_type == GPU_KILLED ? next_E : 0.0));
@@ -527,7 +527,7 @@ void transport_photon_history_soa_gpu(const uint32_t rank_cell_offset,
           active = false;
           cell_ID_ptr[i] = cell->get_next_cell(surface_cross);
           descriptors_ptr[i] = static_cast<unsigned char>(Constants::PASS);
-#ifdef USE_CUDA
+#ifdef USE_GPU
           // atomicAdd(&cell_tallies[local_cell_index].abs_E, thread_absorbed_E);
           // atomicAdd(&cell_tallies[local_cell_index].track_E, thread_track_E);
           warp_atomic_addh(&cell_tallies[local_cell_index].abs_E, local_cell_index, thread_absorbed_E); //+ (event_type == GPU_KILLED ? next_E : 0.0));
@@ -539,7 +539,7 @@ void transport_photon_history_soa_gpu(const uint32_t rank_cell_offset,
         } else if (boundary_event == Constants::VACUUM || boundary_event == Constants::SOURCE) {
           active = false;
           descriptors_ptr[i] = static_cast<unsigned char>(Constants::EXIT);
-#ifdef USE_CUDA
+#ifdef USE_GPU
           // atomicAdd(&cell_tallies[local_cell_index].abs_E, thread_absorbed_E);
           // atomicAdd(&cell_tallies[local_cell_index].track_E, thread_track_E);
           warp_atomic_addh(&cell_tallies[local_cell_index].abs_E, local_cell_index, thread_absorbed_E); //+ (event_type == GPU_KILLED ? next_E : 0.0));
@@ -558,7 +558,7 @@ void transport_photon_history_soa_gpu(const uint32_t rank_cell_offset,
       else if (dist_to_event == dist_to_census) {
         active = false;
         descriptors_ptr[i] = static_cast<unsigned char>(Constants::CENSUS);
-#ifdef USE_CUDA
+#ifdef USE_GPU
         // atomicAdd(&cell_tallies[local_cell_index].abs_E, thread_absorbed_E);
         // atomicAdd(&cell_tallies[local_cell_index].track_E, thread_track_E);
         warp_atomic_addh(&cell_tallies[local_cell_index].abs_E, local_cell_index, thread_absorbed_E); //+ (event_type == GPU_KILLED ? next_E : 0.0));
@@ -658,7 +658,7 @@ void history_cpu_transport_photons(const uint32_t rank_cell_offset,
 GPU_KERNEL
 void gpu_history_transport_aos_kernel(const uint32_t rank_cell_offset,
     Photon *all_photons, const Cell *cells, Cell_Tally *cell_tallies, const uint32_t n_photons) {
-#ifdef USE_CUDA
+#ifdef USE_GPU
   int32_t i = threadIdx.x + blockIdx.x * blockDim.x;
   if (i < n_photons) {
     // Call the GPU device version
@@ -674,7 +674,7 @@ void gpu_history_transport_soa_kernel(const uint32_t rank_cell_offset,
     std::array<double, 3>* pos_ptr, std::array<double, 3>* angle_ptr,
     double* E_ptr, double* E0_ptr, double* life_dx_ptr, RNG* rng_ptr,
     const Cell *cells, Cell_Tally *cell_tallies, const uint32_t n_photons) {
-#ifdef USE_CUDA
+#ifdef USE_GPU
   int32_t i = threadIdx.x + blockIdx.x * blockDim.x;
   if (i < n_photons) {
     // Call the GPU device version
@@ -694,7 +694,7 @@ void gpu_history_transport_soa_kernel(const uint32_t rank_cell_offset,
 void gpu_transport_photons(const uint32_t rank_cell_offset,
     std::vector<Photon> &cpu_photons, const Cell *device_cells_ptr, std::vector<Cell_Tally> &cpu_cell_tallies) {
 
-#ifdef USE_CUDA
+#ifdef USE_GPU
   uint32_t n_photons = static_cast<uint32_t>(cpu_photons.size());
   if (n_photons == 0) return; // No work to do
 
@@ -706,17 +706,17 @@ void gpu_transport_photons(const uint32_t rank_cell_offset,
   // Allocate and copy photons
   Photon *device_photons_ptr;
   cudaError_t err = cudaMalloc((void **)&device_photons_ptr, sizeof(Photon) * n_photons);
-  Insist(!err, "CUDA error allocating photons");
+  Insist(!err, "CUDA/HIP error allocating photons");
   err = cudaMemcpy(device_photons_ptr, cpu_photons.data(), sizeof(Photon) * n_photons, cudaMemcpyHostToDevice);
-  Insist(!err, "CUDA error copying photons to device");
+  Insist(!err, "CUDA/HIP error copying photons to device");
 
   // Allocate and copy cell tallies (zero initialize on device)
   Cell_Tally *device_cell_tallies_ptr;
   size_t tallies_size = sizeof(Cell_Tally) * cpu_cell_tallies.size();
   err = cudaMalloc((void **)&device_cell_tallies_ptr, tallies_size);
-  Insist(!err, "CUDA error allocating cell tallies");
+  Insist(!err, "CUDA/HIP error allocating cell tallies");
   cudaMemcpy(device_cell_tallies_ptr, cpu_cell_tallies.data(), cpu_cell_tallies.size()* sizeof(Cell_Tally), cudaMemcpyHostToDevice);
-  Insist(!err, "CUDA error copying cell tallies");
+  Insist(!err, "CUDA/HIP error copying cell tallies");
 
   // Kernel settings
   int n_threads = Constants::n_threads_per_block;
@@ -726,23 +726,23 @@ void gpu_transport_photons(const uint32_t rank_cell_offset,
   gpu_history_transport_aos_kernel<<<n_blocks, n_threads>>>(
       rank_cell_offset, device_photons_ptr, device_cells_ptr, device_cell_tallies_ptr, n_photons);
 
-  err = cudaGetLastError(); Insist(!err, "CUDA error in history AoS kernel launch");
-  err = cudaDeviceSynchronize(); Insist(!err, "CUDA error synchronizing after history AoS kernel");
+  err = cudaGetLastError(); Insist(!err, "CUDA/HIP error in history AoS kernel launch");
+  err = cudaDeviceSynchronize(); Insist(!err, "CUDA/HIP error synchronizing after history AoS kernel");
 
   // Copy particles back to host
   err = cudaMemcpy(cpu_photons.data(), device_photons_ptr, n_photons * sizeof(Photon), cudaMemcpyDeviceToHost);
-  Insist(!err, "CUDA error copying photons back to host");
+  Insist(!err, "CUDA/HIP error copying photons back to host");
 
   // Copy cell tallies back to host
   err = cudaMemcpy(cpu_cell_tallies.data(), device_cell_tallies_ptr, tallies_size, cudaMemcpyDeviceToHost);
-  Insist(!err, "CUDA error copying cell tallies back to host");
+  Insist(!err, "CUDA/HIP error copying cell tallies back to host");
 
   // Free device memory
   cudaFree(device_photons_ptr);
   cudaFree(device_cell_tallies_ptr);
 #else
-  // Provide a fallback or error if CUDA is not enabled but this function is called
-  std::cerr << "Warning: GPU transport called but CUDA is not enabled. Running on CPU." << std::endl;
+  // Provide a fallback or error if GPU is not enabled but this function is called
+  std::cerr << "Warning: GPU transport called but CUDA/HIP is not enabled. Running on CPU." << std::endl;
   // Find number of threads available
   int n_omp_threads = 1;
 #ifdef USE_OPENMP
@@ -760,7 +760,7 @@ void gpu_transport_photons(const uint32_t rank_cell_offset,
 void gpu_transport_photons(const uint32_t rank_cell_offset,
     PhotonArray &cpu_photons, const Cell *device_cells_ptr, std::vector<Cell_Tally> &cpu_cell_tallies) {
 
-#ifdef USE_CUDA
+#ifdef USE_GPU
   uint32_t n_photons = static_cast<uint32_t>(cpu_photons.size());
    if (n_photons == 0) return; // No work to do
 
@@ -797,9 +797,9 @@ void gpu_transport_photons(const uint32_t rank_cell_offset,
   Cell_Tally *device_cell_tallies_ptr;
   size_t tallies_size = sizeof(Cell_Tally) * cpu_cell_tallies.size();
   cudaError_t err = cudaMalloc((void **)&device_cell_tallies_ptr, tallies_size);
-  Insist(!err, "CUDA error allocating cell tallies");
+  Insist(!err, "CUDA/HIP error allocating cell tallies");
   cudaMemcpy(device_cell_tallies_ptr, cpu_cell_tallies.data(), cpu_cell_tallies.size()* sizeof(Cell_Tally), cudaMemcpyHostToDevice);
-  Insist(!err, "CUDA error copying cell tallies");
+  Insist(!err, "CUDA/HIP error copying cell tallies");
 
   // Kernel settings
   int n_threads = Constants::n_threads_per_block;
@@ -811,8 +811,8 @@ void gpu_transport_photons(const uint32_t rank_cell_offset,
       d_E, d_E0, d_life_dx, d_rng,
       device_cells_ptr, device_cell_tallies_ptr, n_photons);
 
-  err = cudaGetLastError(); Insist(!err, "CUDA error in history SoA kernel launch");
-  err = cudaDeviceSynchronize(); Insist(!err, "CUDA error synchronizing after history SoA kernel");
+  err = cudaGetLastError(); Insist(!err, "CUDA/HIP error in history SoA kernel launch");
+  err = cudaDeviceSynchronize(); Insist(!err, "CUDA/HIP error synchronizing after history SoA kernel");
 
   // Copy SoA data back to host
   cudaMemcpy(cpu_photons.cell_ID.data(), d_cell_ID, n_photons * sizeof(uint32_t), cudaMemcpyDeviceToHost);
@@ -828,7 +828,7 @@ void gpu_transport_photons(const uint32_t rank_cell_offset,
 
   // Copy cell tallies back to host
   err = cudaMemcpy(cpu_cell_tallies.data(), device_cell_tallies_ptr, tallies_size, cudaMemcpyDeviceToHost);
-  Insist(!err, "CUDA error copying cell tallies back to host");
+  Insist(!err, "CUDA/HIP error copying cell tallies back to host");
 
   // Free device memory
   cudaFree(d_cell_ID); cudaFree(d_group); /*cudaFree(d_source_type);*/ cudaFree(d_descriptors);
@@ -837,8 +837,8 @@ void gpu_transport_photons(const uint32_t rank_cell_offset,
   cudaFree(device_cell_tallies_ptr);
 
 #else
-  // Provide a fallback or error if CUDA is not enabled but this function is called
-  std::cerr << "Warning: GPU transport called but CUDA is not enabled. Running on CPU." << std::endl;
+  // Provide a fallback or error if CUDA/HIP is not enabled but this function is called
+  std::cerr << "Warning: GPU transport called but CUDA/HIP is not enabled. Running on CPU." << std::endl;
   // Find number of threads available
   int n_omp_threads = 1;
 #ifdef USE_OPENMP
