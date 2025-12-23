@@ -72,6 +72,7 @@ batch_transport(const double next_dt, const bool gpu_available, const GPU_Setup 
                                   cell_tallies, emission_groups);
       auto [batch_complete, batch_exit_E, batch_census_E] =
           post_process_photons(next_dt, all_photons, census_list, mesh, phtn_send_buffer);
+
       n_complete += batch_complete;
       exit_E += batch_exit_E;
       census_E += batch_census_E;

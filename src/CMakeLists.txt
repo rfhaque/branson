@@ -17,8 +17,6 @@ option(USE_GPU "user-set flag to compile in GPU code" FALSE)
 option(USE_CALIPER "Use Caliper" FALSE)
 option(USE_OPENMP "Use OpenMP" FALSE)
 
-set(CMAKE_VERBOSE_MAKEFILE ON)
-
 if(USE_CUDA)
     set(GPU_DBS_STRING "CUDA" CACHE STRING "If CUDA is available, this variable is 'CUDA'")
     enable_language(CUDA)
@@ -275,7 +273,7 @@ elseif("${GPU_DBS_STRING}" STREQUAL "HIP" )
                             "ROCM_PATH to provide the rocm installation.")
       endif()
     endif()
-    
+
     set(CMAKE_HIP_COMPILER "${ROCM_PATH}/llvm/bin/clang++")
     list(APPEND CMAKE_PREFIX_PATH "${ROCM_PATH}/lib/cmake")
 

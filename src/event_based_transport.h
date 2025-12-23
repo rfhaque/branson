@@ -784,25 +784,6 @@ GPU_KERNEL void reset_atomic_counters_kernel(unsigned int* counters, int num_cou
 // SoA GPU Event Kernels                                                      //
 //----------------------------------------------------------------------------//
 
-// Template function for warp-level reduction (sum) operation
-template <typename T>
-GPU_DEVICE inline T warp_reduce_sum(T val, unsigned int mask) {
-    // Get the size of the warp (usually 32, but could be different in future architectures)
-    const unsigned int FULL_WARP = __activemask();
-    const int warp_size = __popc(FULL_WARP);
-
-    // Perform warp-level reduction using shuffle operations
-    for (int offset = warp_size / 2; offset > 0; offset /= 2) {
-        // Add values from other threads within the warp
-        val += __shfl_xor_sync(mask, val, offset);
-    }
-
-    // Find the ID of the first active thread in the group
-    int first_lane = __ffs(mask) - 1;
-
-    // Return the final sum from the first active thread in the warp
-    return __shfl_sync(mask, val, first_lane);
-}
 
 
 // Function to perform atomic addition within a warp
@@ -839,70 +820,6 @@ GPU_DEVICE inline T warp_reduce_sum(T val, unsigned int mask) {
 //         atomicAdd(address, subgroup_sum);
 //     }
 // }
-
-
-GPU_DEVICE inline void warp_atomic_add(double *address, uint32_t cell_idx, double val) {
-    // Get the mask of active threads in the warp
-    const unsigned int active_mask = __activemask();
-
-    // Get the mask of threads with matching cell_idx
-    const unsigned int group_mask = __match_any_sync(active_mask, cell_idx);
-
-    // Calculate the lane ID within the warp (0-31)
-    unsigned int lane_id = threadIdx.x % 32;
-
-    int first_lane = __ffs(group_mask) - 1;
-
-    double subgroup_sum = 0.0;
-    #pragma unroll
-    for (int i = 0; i < 32; i++) {
-      if ((group_mask >> i) & 1) {
-        subgroup_sum += __shfl_sync(group_mask, val, i);
-      }
-    }
-    if (lane_id == first_lane) {
-      atomicAdd(address, subgroup_sum);
-    }
-}
-
-
-
-
-// Function to perform warp-level atomic increment with ballot
-GPU_DEVICE inline bool warp_atomic_inc_ballot(unsigned int* counter, bool pred, unsigned int& position) {
-    // Perform ballot operation to get a mask of threads satisfying the predicate
-    unsigned int ballot_result = __ballot_sync(__activemask(), pred);
-    // If the current thread doesn't satisfy the predicate, return false
-    if (!pred) {
-        return false;
-    }
-    // Get the lane ID within the warp
-    unsigned int lane_id = threadIdx.x % 32;
-
-    // Get the mask of active threads in the warp
-    unsigned int active = __ballot_sync(__activemask(), true);
-    // Count the number of active threads
-    int num_active = __popc(active);
-    // Find the ID of the first active thread (leader)
-    unsigned int leader_lane = __ffs(ballot_result) - 1;
-
-    // Create a mask of threads before the current one
-    unsigned mask_before = ballot_result & ((1U << lane_id) - 1);
-    // Count how many threads are active before this one
-    unsigned int local_rank = __popc(mask_before);
-
-    int warp_base_offset = 0;
-    // If this is the leader thread, perform atomic addition to get the base offset
-    if (lane_id == leader_lane) {
-        warp_base_offset = atomicAdd(counter, __popc(ballot_result));
-    }
-    // Broadcast the base offset to all threads in the warp
-    unsigned int base_index = __shfl_sync(ballot_result, warp_base_offset, leader_lane);
-    // Calculate the final position for this thread
-    position = base_index + local_rank;
-    return true;
-}
-
 
 GPU_KERNEL void precompute_data_gpu(const uint32_t rank_cell_offset,
   const uint32_t* active_indices,
@@ -1369,7 +1286,11 @@ void gpu_event_transport_photons(const uint32_t rank_cell_offset,
 
   } // End while(current_active_count > 0)
 
-  cudaDeviceSynchronize();
+
+  std::cout<<"finished while"<<std::endl;
+  auto sync_err = cudaDeviceSynchronize();
+  Insist(!sync_err, "error in synchronize");
+  std::cout<<"finished while post sync"<<std::endl;
 
   // --- Copy Results Back ---
   err = cudaMemcpy(cpu_photons.cell_ID.data(), d_cell_ID, n_photons * sizeof(uint32_t), cudaMemcpyDeviceToHost); Insist(!err, "SoA GPU copy back failed: cell_ID");
@@ -1385,25 +1306,61 @@ void gpu_event_transport_photons(const uint32_t rank_cell_offset,
   err = cudaMemcpy(cpu_cell_tallies.data(), d_cell_tallies, n_cells * sizeof(Cell_Tally), cudaMemcpyDeviceToHost); Insist(!err, "SoA GPU copy back failed: cell_tallies");
 
   // --- Free GPU Memory ---
-  cudaFree(d_cell_ID);
-  cudaFree(d_group);
-  cudaFree(d_source_type);
-  cudaFree(d_descriptors);
-  cudaFree(d_pos);
-  cudaFree(d_angle);
-  cudaFree(d_E);
-  cudaFree(d_E0);
-  cudaFree(d_life_dx);
-  cudaFree(d_rng);
-  cudaFree(d_cell_tallies);
-  cudaFree(d_emission_groups);
-  cudaFree(d_active_indices_1);
-  cudaFree(d_active_indices_2);
-  cudaFree(d_final_event_types);
-  cudaFree(d_event_distances); cudaFree(d_event_counters); cudaFree(d_event_queue_positions);
-  cudaFree(d_scatter_info); cudaFree(d_boundary_info); cudaFree(d_census_info); cudaFree(d_killed_info);
-  cudaFree(d_sigma_s); cudaFree(d_sigma_a); cudaFree(d_total_sigma_s); cudaFree(d_f);
-  cudaFree(d_next_active_count_atomic);
+  auto free_err = cudaFree(d_cell_ID);
+  if (free_err) std::cout<<"Error freeing d_cell_ID"<<std::endl;
+  free_err = cudaFree(d_group);
+  if (free_err) std::cout<<"Error freeing d_group"<<std::endl;
+  free_err = cudaFree(d_source_type);
+  if (free_err) std::cout<<"Error freeing d_source_type"<<std::endl;
+  free_err = cudaFree(d_descriptors);
+  if (free_err) std::cout<<"Error freeing d_descriptors"<<std::endl;
+  free_err = cudaFree(d_pos);
+  if (free_err) std::cout<<"Error freeing d_pos"<<std::endl;
+  free_err = cudaFree(d_angle);
+  if (free_err) std::cout<<"Error freeing d_angle"<<std::endl;
+  free_err = cudaFree(d_E);
+  if (free_err) std::cout<<"Error freeing d_E"<<std::endl;
+  free_err = cudaFree(d_E0);
+  if (free_err) std::cout<<"Error freeing d_E0"<<std::endl;
+  free_err = cudaFree(d_life_dx);
+  if (free_err) std::cout<<"Error freeing d_life_dx"<<std::endl;
+  free_err = cudaFree(d_rng);
+  if (free_err) std::cout<<"Error freeing d_rng"<<std::endl;
+  free_err = cudaFree(d_cell_tallies);
+  if (free_err) std::cout<<"Error freeing d_cell_tallies"<<std::endl;
+  free_err = cudaFree(d_emission_groups);
+  if (free_err) std::cout<<"Error freeing d_emission_groups"<<std::endl;
+  free_err = cudaFree(d_active_indices_1);
+  if (free_err) std::cout<<"Error freeing d_active_indices_1"<<std::endl;
+  free_err = cudaFree(d_active_indices_2);
+  if (free_err) std::cout<<"Error freeing d_active_indices_2"<<std::endl;
+  free_err = cudaFree(d_final_event_types);
+  if (free_err) std::cout<<"Error freeing d_final_event_types"<<std::endl;
+  free_err = cudaFree(d_event_distances);
+  if (free_err) std::cout<<"Error freeing d_event_distances"<<std::endl;
+  free_err = cudaFree(d_event_counters);
+  if (free_err) std::cout<<"Error freeing d_event_counters"<<std::endl;
+  free_err = cudaFree(d_event_queue_positions);
+  if (free_err) std::cout<<"Error freeing d_event_queue_positions"<<std::endl;
+  free_err = cudaFree(d_scatter_info);
+  if (free_err) std::cout<<"Error freeing d_scatter_info"<<std::endl;
+  free_err = cudaFree(d_boundary_info);
+  if (free_err) std::cout<<"Error freeing d_boundary_info"<<std::endl;
+  free_err = cudaFree(d_census_info);
+  if (free_err) std::cout<<"Error freeing d_census_info"<<std::endl;
+  free_err = cudaFree(d_killed_info);
+  if (free_err) std::cout<<"Error freeing d_killed_info"<<std::endl;
+  free_err = cudaFree(d_sigma_s);
+  if (free_err) std::cout<<"Error freeing d_sigma_s"<<std::endl;
+  free_err = cudaFree(d_sigma_a);
+  if (free_err) std::cout<<"Error freeing d_sigma_a"<<std::endl;
+  free_err = cudaFree(d_total_sigma_s);
+  if (free_err) std::cout<<"Error freeing d_total_sigma_s"<<std::endl;
+  free_err = cudaFree(d_f);
+  if (free_err) std::cout<<"Error freeing d_f"<<std::endl;
+  free_err = cudaFree(d_next_active_count_atomic);
+  if (free_err) std::cout<<"Error freeing d_next_avtive_count_atomic"<<std::endl;
+  std::cout<<"about to exit event transport loop"<<std::endl;
 }
 
 
@@ -1807,32 +1764,45 @@ void gpu_event_transport_photons(const uint32_t rank_cell_offset,
 
   } // End while(current_active_count > 0)
 
-  cudaDeviceSynchronize(); // Ensure all kernels are finished before copy back
+  auto sync_error = cudaDeviceSynchronize(); // Ensure all kernels are finished before copy back
+  Insist(!sync_error, "Error in synchronize");
 
   // --- Copy Results Back ---
   err = cudaMemcpy(cpu_photons.data(), d_photons, sizeof(Photon) * n_photons, cudaMemcpyDeviceToHost); Insist(!err, "GPU AoS Memcpy D2H Error: d_photons final");
   err = cudaMemcpy(cpu_cell_tallies.data(), d_cell_tallies, sizeof(Cell_Tally) * n_cells, cudaMemcpyDeviceToHost); Insist(!err, "GPU AoS Memcpy D2H Error: d_cell_tallies final");
 
   // --- Free GPU Memory ---
-  cudaFree(d_photons);
-  cudaFree(d_cell_tallies);
-  cudaFree(d_emission_groups);
-  cudaFree(d_active_indices_1);
-  cudaFree(d_active_indices_2);
-  cudaFree(d_event_types_1);
-  cudaFree(d_event_types_2);
-  cudaFree(d_event_distances);
-  cudaFree(d_event_counters);
-  cudaFree(d_event_queue_positions);
-  cudaFree(d_scatter_indices);
-  cudaFree(d_boundary_indices);
-  cudaFree(d_census_indices);
-  cudaFree(d_killed_indices);
-  cudaFree(d_next_active_count_atomic);
+  auto free_err = cudaFree(d_photons);
+  if (free_err) std::cout<<"Error freeing d_photons"<<std::endl;
+  free_err = cudaFree(d_cell_tallies);
+  if (free_err) std::cout<<"Error freeing d_cell_tallies"<<std::endl;
+  free_err = cudaFree(d_emission_groups);
+  if (free_err) std::cout<<"Error freeing d_emission_groups"<<std::endl;
+  free_err = cudaFree(d_active_indices_1);
+  if (free_err) std::cout<<"Error freeing d_active_indices_1"<<std::endl;
+  free_err = cudaFree(d_active_indices_2);
+  if (free_err) std::cout<<"Error freeing d_active_indices_2"<<std::endl;
+  free_err = cudaFree(d_event_types_1);
+  if (free_err) std::cout<<"Error freeing d_event_types_1"<<std::endl;
+  free_err = cudaFree(d_event_types_2);
+  if (free_err) std::cout<<"Error freeing d_event_types_2"<<std::endl;
+  free_err = cudaFree(d_event_distances);
+  if (free_err) std::cout<<"Error freeing d_event_distance"<<std::endl;
+  free_err = cudaFree(d_event_counters);
+  if (free_err) std::cout<<"Error freeing d_event_counters"<<std::endl;
+  free_err = cudaFree(d_event_queue_positions);
+  if (free_err) std::cout<<"Error freeing d_event_queue_positions"<<std::endl;
+  free_err = cudaFree(d_scatter_indices);
+  if (free_err) std::cout<<"Error freeing d_scatter_indices"<<std::endl;
+  free_err = cudaFree(d_boundary_indices);
+  if (free_err) std::cout<<"Error freeing d_boundary_indices"<<std::endl;
+  free_err = cudaFree(d_census_indices);
+  if (free_err) std::cout<<"Error freeing d_census_indices"<<std::endl;
+  free_err = cudaFree(d_killed_indices);
+  if (free_err) std::cout<<"Error freeing d_killed_indices"<<std::endl;
+  free_err = cudaFree(d_next_active_count_atomic);
+  if (free_err) std::cout<<"Error freeing d_next_active_count_atomic"<<std::endl;
 }
-
-
-
 
 #endif // USE_GPU
 

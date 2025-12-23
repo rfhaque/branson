@@ -50,16 +50,19 @@
 #ifdef __NVCC__
 #define USE_CUDA ON
 #define USE_GPU ON
+static constexpr uint32_t WARP_SIZE=32;
 #endif
 
 #ifdef __HIPCC__
 #define USE_HIP ON
 #define USE_GPU
+static constexpr uint32_t WARP_SIZE=64;
 #endif
 
 /*------------------------------------------------------------------------------------------------*/
 /* HIP Support */
 #ifdef USE_HIP
+#define HIP_ENABLE_WARP_SYNC_BUILTINS
 #include <hip/hip_runtime.h>
 #include <hip/hip_runtime_api.h>
 #define cudaDevAttrClockRate hipDeviceAttributeClockRate
@@ -85,6 +88,8 @@
 #define cudaMemcpyHostToDevice hipMemcpyHostToDevice
 #define cudaSetDevice hipSetDevice
 #define cudaSuccess hipSuccess
+#define cudaMemSet hipMemSet
+#define cudaMemset hipMemset
 #endif // USE_HIP
 
 #ifdef USE_CUDA
@@ -98,6 +103,13 @@
 
 #endif
 
+inline void Insist(const bool pass, const std::string &message) {
+  if (!pass) {
+    std::cout<<"Insist at "<< __FILE__ <<" "<<__LINE__<<" fails with: "<<message<<std::endl;
+    MPI_Abort(MPI_COMM_WORLD, 1);
+  }
+}
+
 #ifdef USE_GPU
 
 // mark functions for GPU execution
@@ -109,9 +121,133 @@
 //! Add addend to t, use atomicAdd if built on a CUDA device
 template <class T>
 GPU_HOST_DEVICE inline void accumulate(T &target, T const addend) {
+  #if defined(__HIP_DEVICE_COMPILE__) or defined(__CUDA_ARCH__)
   atomicAdd(&target, addend);
   return;
+  #endif
 }
+
+// Function to perform warp-level atomic increment with ballot
+GPU_DEVICE inline bool warp_atomic_inc_ballot(unsigned int* counter, bool pred, unsigned int& position) {
+  #if defined(__HIP_DEVICE_COMPILE__) or defined(__CUDA_ARCH__)
+    // Perform ballot operation to get a mask of threads satisfying the predicate
+    auto ballot_result = __ballot_sync(__activemask(), pred);
+    // If the current thread doesn't satisfy the predicate, return false
+    if (!pred) {
+        return false;
+    }
+    // Get the lane ID within the warp
+    unsigned int lane_id = threadIdx.x % WARP_SIZE;
+
+    // Get the mask of active threads in the warp
+    auto active = __ballot_sync(__activemask(), true);
+    // Find the ID of the first active thread (leader)
+    #ifdef USE_CUDA
+    // Count the number of active threads
+    int num_active = __popc(active);
+    auto leader_lane = __ffs(ballot_result) - 1;
+    // Create a mask of threads before the current one
+    uint64_t mask_before = ballot_result & ((1U << lane_id) - 1);
+    // Count how many threads are active before this one
+    unsigned int local_rank = __popc(mask_before);
+
+    int warp_base_offset = 0;
+    // If this is the leader thread, perform atomic addition to get the base offset
+    if (lane_id == leader_lane) {
+        warp_base_offset = atomicAdd(counter, __popc(ballot_result));
+    }
+    #else
+    // Count the number of active threads
+    int num_active = __popcll(active);
+    auto leader_lane = __ffsll(ballot_result) - 1;
+    // Create a mask of threads before the current one
+    uint64_t mask_before = ballot_result & ((1UL << lane_id) - 1UL);
+    // Count how many threads are active before this one
+    unsigned int local_rank = __popcll(mask_before);
+
+    int warp_base_offset = 0;
+    // If this is the leader thread, perform atomic addition to get the base offset
+    if (lane_id == leader_lane) {
+        warp_base_offset = atomicAdd(counter, __popcll(ballot_result));
+    }
+    #endif
+
+    // Broadcast the base offset to all threads in the warp
+    unsigned int base_index = __shfl_sync(ballot_result, warp_base_offset, leader_lane);
+    // Calculate the final position for this thread
+    position = base_index + local_rank;
+    #endif
+    return true;
+}
+
+GPU_HOST_DEVICE inline void warp_atomic_addh(double *address, uint32_t cell_idx, double val) {
+  #if defined(__HIP_DEVICE_COMPILE__) or defined(__CUDA_ARCH__)
+    // Get the mask of active threads in the warp
+    const auto active_mask = __activemask();
+
+    // Get the mask of threads with matching cell_idx
+    const auto group_mask = __match_any_sync(active_mask, cell_idx);
+
+    // Calculate the lane ID within the warp (0-32 or 0-64)
+    unsigned int lane_id = threadIdx.x % WARP_SIZE;
+
+    #ifdef USE_CUDA
+    auto first_lane = __ffs(group_mask) - 1;
+    #else
+    auto first_lane = __ffsll(group_mask) - 1;
+    #endif
+
+    double subgroup_sum = 0.0;
+    for (int i = 0; i < WARP_SIZE; i++) {
+      if ((group_mask >> i) & 1) {
+        subgroup_sum += __shfl_sync(group_mask, val, i);
+      }
+    }
+    if (lane_id == first_lane) {
+      atomicAdd(address, subgroup_sum);
+    }
+  #endif
+}
+
+GPU_HOST_DEVICE inline void warp_atomic_add(double *address, uint32_t cell_idx, double val) {
+  #if defined(__HIP_DEVICE_COMPILE__) or defined(__CUDA_ARCH__)
+    // Get the mask of active threads in the warp
+    const auto active_mask = __activemask();
+
+    // Get the mask of threads with matching cell_idx
+    const auto group_mask = __match_any_sync(active_mask, cell_idx);
+
+    // Calculate the lane ID within the warp (0-31 or 0-64)
+    unsigned int lane_id = threadIdx.x % WARP_SIZE;
+
+    #ifdef USE_CUDA
+    auto first_lane = __ffs(group_mask) - 1;
+    #else
+    auto first_lane = __ffsll(group_mask) - 1;
+    #endif
+
+    double subgroup_sum = 0.0;
+    #pragma unroll
+    for (int i = 0; i < WARP_SIZE; i++) {
+      if ((group_mask >> i) & 1) {
+        subgroup_sum += __shfl_sync(group_mask, val, i);
+      }
+    }
+    if (lane_id == first_lane) {
+      atomicAdd(address, subgroup_sum);
+    }
+    #endif
+}
+
+inline void device_debug_print(size_t n_photons, const std::string &alg_type) {
+#ifdef ENABLE_VERBOSE_GPU_TRANSPORT
+  int my_device = 0;
+  auto device_err = cudaGetDevice(&my_device);
+  Insist(!device_err, "error in get device");
+  std::cout <<"--"<<alg_type<<"-- device: " << my_device << ", photons: " << n_photons << std::endl;
+#endif
+}
+
 
 #else
 
@@ -125,17 +261,24 @@ template <class T> inline void accumulate(T &target, T const addend) {
   target += addend;
   return;
 }
-#endif // USE_GPU
 
-inline void Insist(const bool pass, const std::string &message) {
-  if (!pass) {
-    std::cout<<"Insist at "<< __FILE__ <<" "<<__LINE__<<" fails with: "<<message<<std::endl;
-    MPI_Abort(MPI_COMM_WORLD, 1);
-  }
+// Function to perform warp-level atomic increment with ballot stub
+inline bool warp_atomic_inc_ballot(unsigned int* /*counter*/, bool /*pred*/, unsigned int& /*position*/) {
+  return false;
 }
 
-#ifdef caliper_FOUND
+inline void warp_atomic_addh(double * /*address*/, uint32_t /*cell_idx*/, double /*val*/) {}
 
+template <typename T>
+inline T warp_reduce_sum(T /*val*/, unsigned int /*mask*/) {return {0.0};}
+
+inline void warp_atomic_add(double * /*address*/, uint32_t /*cell_idx*/, double /*val*/) {}
+
+inline void device_debug_print(size_t n_photons, const std::string &alg_type) {}
+
+#endif // USE_GPU
+
+#ifdef caliper_FOUND
 
 void wrapped_cali_mark_begin(const char *timer_name) {
     CALI_MARK_BEGIN(timer_name);
