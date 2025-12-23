@@ -19,7 +19,7 @@ option(USE_OPENMP "Use OpenMP" FALSE)
 
 set(CMAKE_VERBOSE_MAKEFILE ON)
 
-find_package(MPI REQUIRED)
+find_package(MPI REQUIRED C CXX)
 list(APPEND branson_deps
   MPI::MPI_C
   MPI::MPI_CXX)
