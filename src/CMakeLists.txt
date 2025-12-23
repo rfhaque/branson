@@ -19,7 +19,20 @@ option(USE_OPENMP "Use OpenMP" FALSE)
 
 set(CMAKE_VERBOSE_MAKEFILE ON)
 
-find_package(MPI REQUIRED C CXX)
+find_package(MPI REQUIRED)
+
+if (TARGET MPI::MPI_CXX)
+  message(STATUS "Target MPI::MPI_C is defined")
+else()
+  message(STATUS "Target MPI::MPI_C is NOT defined")
+endif()
+
+if (TARGET MPI::MPI_C)
+  message(STATUS "Target MPI::MPI_C is defined")
+else()
+  message(STATUS "Target MPI::MPI_C is NOT defined")
+endif()
+
 list(APPEND branson_deps
   MPI::MPI_C
   MPI::MPI_CXX)
