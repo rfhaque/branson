@@ -61,6 +61,56 @@ function( add_branson_test )
   endforeach()
 endfunction()
 
+function( add_branson_gpu_test )
+  cmake_parse_arguments(
+    abt
+    ""
+    "SOURCE"
+    "PE_LIST"
+    ${ARGV} )
+  string( REPLACE ".cc" "_exe" build_target ${abt_SOURCE} )
+  string( REPLACE ".cc" ""     ctest_name   ${abt_SOURCE} )
+
+  # Build the test
+  add_executable( ${build_target} ${abt_SOURCE} )
+  target_include_directories( ${build_target} PRIVATE
+    $<BUILD_INTERFACE:${BRANSON_BINARY_DIR}> )
+  target_link_libraries( ${build_target} PUBLIC ${branson_deps} )
+
+  if("${GPU_DBS_STRING}" STREQUAL "CUDA" )
+    message("Setting CUDA compiler options")
+    #set_target_properties(BRANSON PROPERTIES CUDA_ARCHITECTURES "90") # H100
+    #set_target_properties(BRANSON PROPERTIES CUDA_ARCHITECTURES "70") # V100
+    set_target_properties(${build_target} PROPERTIES CUDA_ARCHITECTURES "80") # A100
+    set_target_properties(${build_target} PROPERTIES CUDA_STANDARD 17)
+    #string(APPEND CMAKE_CUDA_FLAGS " -g --expt-relaxed-constexpr --fmad=false -lineinfo")
+    #string(APPEND CMAKE_CUDA_FLAGS " --expt-extended-lambda"  )
+    set_source_files_properties(${abt_SOURCE} PROPERTIES LANGUAGE CUDA)
+  elseif("${GPU_DBS_STRING}" STREQUAL "HIP" )
+    message("Setting HIP compiler options")
+    #if(CMAKE_HIP_COMPILER MATCHES "CC")
+    #  set(CMAKE_HIP_FLAGS "-x hip")
+    #endif()
+    set_target_properties(${build_target} PROPERTIES HIP_ARCHITECTURES "gfx942") # MI300
+    set_target_properties(${build_target} PROPERTIES HIP_STANDARD 17)
+    #string(APPEND CMAKE_CXX_FLAGS " -D__HIP_PLATFORM_HCC__= -D__HIP_PLATFORM_AMD__=")
+    #string(APPEND CMAKE_CXX_FLAGS " -Wno-switch-default")
+    set_source_files_properties(${abt_SOURCE} PROPERTIES LANGUAGE HIP)
+  else()
+    message("GPU Options: Not a GPU build or GPU_DBS_STRING not recognized")
+  endif()
+
+  # Register the test command with ctest.
+  foreach( np ${abt_PE_LIST} )
+    add_test(
+      NAME    ${ctest_name}_${np}pe
+      COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} ${np}
+              ${mpiexec_postflags_list}
+              $<TARGET_FILE:${build_target}> )
+    set_tests_properties( ${ctest_name}_${np}pe PROPERTIES PROCESSORS ${np} )
+  endforeach()
+endfunction()
+
 #------------------------------------------------------------------------------#
 # 1 PE tests
 
@@ -82,6 +132,7 @@ endforeach()
 #------------------------------------------------------------------------------#
 # Other tests
 
+add_branson_gpu_test( SOURCE test_warp_reductions.cc      PE_LIST "1" )
 add_branson_test( SOURCE test_imc_state.cc      PE_LIST "2" )
 add_branson_test( SOURCE test_photon.cc      PE_LIST "2" )
 
