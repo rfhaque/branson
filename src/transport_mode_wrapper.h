@@ -31,6 +31,7 @@ batch_transport(const double next_dt, const bool gpu_available, const GPU_Setup 
   if (transport_algorithm == Constants::HISTORY) {
     // HISTORY: GPU
     if (gpu_setup.use_gpu_transporter() && gpu_available) {
+#ifdef USE_GPU
       if constexpr (std::is_same_v<Census_T, std::vector<Photon>>) {
         gpu_transport_photons(rank_cell_offset, all_photons, gpu_setup.get_device_cells_ptr(),
                               cell_tallies);
@@ -38,6 +39,7 @@ batch_transport(const double next_dt, const bool gpu_available, const GPU_Setup 
         gpu_transport_photons(rank_cell_offset, all_photons, gpu_setup.get_device_cells_ptr(),
                               cell_tallies);
       }
+#endif
     } // HISTORY: GPU
     // HISTORY: CPU
     else {
@@ -64,6 +66,7 @@ batch_transport(const double next_dt, const bool gpu_available, const GPU_Setup 
     }
     // EVENT: GPU
     if (gpu_setup.use_gpu_transporter() && gpu_available) {
+#ifdef USE_GPU
       // Call the correct overloaded gpu_event_transport_photons based on Census_T
       gpu_event_transport_photons(rank_cell_offset, all_photons, gpu_setup.get_device_cells_ptr(),
                                   cell_tallies, emission_groups);
@@ -73,6 +76,7 @@ batch_transport(const double next_dt, const bool gpu_available, const GPU_Setup 
       n_complete += batch_complete;
       exit_E += batch_exit_E;
       census_E += batch_census_E;
+#endif
     } // GPU
     // EVENT: CPU
     else {

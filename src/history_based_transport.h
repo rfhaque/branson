@@ -392,8 +392,6 @@ void transport_photon_history_aos_gpu(const uint32_t rank_cell_offset,
     } // end event loop
   } // end while alive
 }
-
-
 //----------------------------------------------------------------------------//
 // SoA Transport Function (GPU Device)
 //----------------------------------------------------------------------------//
