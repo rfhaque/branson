@@ -45,7 +45,8 @@ public:
   ~GPU_Setup() {
 #ifdef USE_GPU
     if(m_use_gpu_transporter) {
-      cudaFree(device_cells_ptr);
+      auto free_err = cudaFree(device_cells_ptr);
+      Insist(!free_err, "Error in freeing");
     }
 #endif
   }
@@ -69,15 +70,18 @@ void set_device_ID(const int rank, const int n_ranks) {
 #ifdef USE_GPU
   // device set
   int n_devices;
-  cudaGetDeviceCount(&n_devices);
+  auto err_count = cudaGetDeviceCount(&n_devices);
+  Insist(!err_count, "error in device count");
   int my_device = 0;
   if (n_ranks <= n_devices)
     my_device = rank;
   else
     my_device = rank % n_devices;
-  cudaSetDevice(my_device);
+  auto err_set = cudaSetDevice(my_device);
+  Insist(!err_set, "error in device set");
   int my_bus_id = 0;
-  cudaDeviceGetAttribute(&my_bus_id, cudaDevAttrPciBusId, my_device);
+  auto attribute_err = cudaDeviceGetAttribute(&my_bus_id, cudaDevAttrPciBusId, my_device);
+  Insist(!attribute_err, "error in device attribute");
   std::cout << "N devices: " << n_devices << std::endl;
   std::cout << "rank: " << rank << ", device: " << my_device << " bus id: ";
   std::cout << my_bus_id << std::endl;

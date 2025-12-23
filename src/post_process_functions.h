@@ -91,7 +91,7 @@ std::tuple<uint64_t, double, double>  post_process_photons<PhotonArray>(const do
       int i_b = adjacent_procs.at(send_rank);
       send_list[i_b].push_back( all_photons.get_photon(i));
       break;
-    } //switch(descriptor)
+    } // switch(descriptor)
   }
 
   // append census photons on to census list
