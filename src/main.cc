@@ -64,6 +64,11 @@ int main(int argc, char **argv) {
       cout << " Branson compiled on: " << mpi_info.get_machine_name() << endl;
     }
 
+    // timing
+    Timer timers;
+
+    timers.start_timer("Total");
+
     // make MPI types object
     MPI_Types mpi_types;
 
@@ -79,18 +84,15 @@ int main(int argc, char **argv) {
     // IMC state setup
     IMC_State imc_state(input, mpi_info.get_rank());
 
-    // timing
-    Timer timers;
-
     // make mesh from input object
-    timers.start_timer("Total setup");
+    timers.start_timer("setup");
 
     wrapped_cali_mark_begin("mesh setup");
     Mesh mesh(input, mpi_types, mpi_info, imc_p);
     mesh.initialize_physical_properties(input);
     wrapped_cali_mark_end("mesh setup");
 
-    timers.stop_timer("Total setup");
+    timers.stop_timer("setup");
 
     MPI_Barrier(MPI_COMM_WORLD);
     // print_MPI_out(mesh, rank, n_rank);
@@ -104,18 +106,16 @@ int main(int argc, char **argv) {
     // TRT PHYSICS CALCULATION
     //--------------------------------------------------------------------------//
 
-    timers.start_timer("Total non-setup");
-
     if (input.get_dd_mode() == PARTICLE_PASS) {
       if( input.get_particle_storage() == AOS) {
-        wrapped_cali_mark_begin("particle pass soa");
-        imc_particle_pass_driver<PhotonArray>(mesh, imc_state, imc_p, mpi_types, mpi_info);
-        wrapped_cali_mark_end("particle pass soa");
-      }
-      else if(input.get_particle_storage() == SOA) {
         wrapped_cali_mark_begin("particle pass aos");
         imc_particle_pass_driver<std::vector<Photon>>(mesh, imc_state, imc_p, mpi_types, mpi_info);
         wrapped_cali_mark_end("particle pass aos");
+      }
+      else if(input.get_particle_storage() == SOA) {
+        wrapped_cali_mark_begin("particle pass soa");
+        imc_particle_pass_driver<PhotonArray>(mesh, imc_state, imc_p, mpi_types, mpi_info);
+        wrapped_cali_mark_end("particle pass soa");
       }
       else {
         cout << "Driver for array currently not supported" << endl;
@@ -123,15 +123,15 @@ int main(int argc, char **argv) {
       }
     }
     else if (input.get_dd_mode() == REPLICATED) {
-      if( input.get_particle_storage() == SOA) {
-        wrapped_cali_mark_begin("replicated soa");
-        imc_replicated_driver<PhotonArray>(mesh, imc_state, imc_p, mpi_types, mpi_info);
-        wrapped_cali_mark_end("replicated soa");
-      }
-      else if(input.get_particle_storage() == AOS) {
+      if(input.get_particle_storage() == AOS) {
         wrapped_cali_mark_begin("replicated aos");
         imc_replicated_driver<std::vector<Photon>>(mesh, imc_state, imc_p, mpi_types, mpi_info);
         wrapped_cali_mark_end("replicated aos");
+      }
+      else if( input.get_particle_storage() == SOA) {
+        wrapped_cali_mark_begin("replicated soa");
+        imc_replicated_driver<PhotonArray>(mesh, imc_state, imc_p, mpi_types, mpi_info);
+        wrapped_cali_mark_end("replicated soa");
       }
       else {
         cout << "Driver for array currently not supported" << endl;
@@ -143,7 +143,7 @@ int main(int argc, char **argv) {
       exit(EXIT_FAILURE);
     }
 
-    timers.stop_timer("Total non-setup");
+    timers.stop_timer("Total");
 
     if (mpi_info.get_rank() == 0) {
       cout << "****************************************";

@@ -14,6 +14,7 @@
 
 #include <mpi.h>
 #include <vector>
+#include <cstdint>
 
 template <class T> class Buffer {
 

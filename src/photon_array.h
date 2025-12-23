@@ -1,9 +1,9 @@
 //----------------------------------*-C++-*-----------------------------------//
 /*!
- * \file   photon.h
+ * \file   photon_array.h
  * \author Alex Long
- * \date   July 18 2014
- * \brief  Holds values and functions needed for transporting photon
+ * \date   July 18 2014, Modified for SoA
+ * \brief  Holds values and functions needed for transporting photons (SoA)
  * \note   Copyright (C) 2017 Los Alamos National Security, LLC.
  *         All rights reserved
  */
@@ -16,18 +16,20 @@
 #include <iostream>
 #include <vector>
 #include <array>
+#include <stdexcept> // For std::out_of_range
 
 #include "constants.h"
 #include "config.h"
 #include "RNG.h"
+#include "photon.h" // Include Photon definition for push_back
 
-//Strucutre of arrrays to store photon attributes
+// Structure of arrays to store photon attributes
 class PhotonArray {
 public:
   std::vector<uint32_t> cell_ID;
   std::vector<uint32_t> group;
-  std::vector<uint32_t> source_type;
-  std::vector<unsigned char> descriptors;
+  std::vector<uint32_t> source_type; // CENSUS, EMISSION, SOURCE (as uint32_t)
+  std::vector<unsigned char> descriptors; // Event type (as uchar)
   std::vector<std::array<double, 3>> pos;
   std::vector<std::array<double, 3>> angle;
   std::vector<double> E;
@@ -35,19 +37,22 @@ public:
   std::vector<double> life_dx;
   std::vector<RNG> rng;
 
+  // Add a photon from a Photon object (AoS -> SoA)
   void push_back(const Photon& photon) {
     cell_ID.push_back(photon.get_cell());
     group.push_back(photon.get_group());
     source_type.push_back(photon.get_source_type());
-    descriptors.push_back(photon.get_descriptor());
+    // Ensure descriptor is stored as unsigned char
+    descriptors.push_back(static_cast<unsigned char>(photon.get_descriptor()));
     pos.push_back(photon.get_position());
     angle.push_back(photon.get_angle());
     E.push_back(photon.get_E());
     E0.push_back(photon.get_E0());
     life_dx.push_back(photon.get_distance_remaining());
-    rng.push_back(photon.get_rng());
+    rng.push_back(photon.get_rng()); // Assumes RNG is copyable
   }
 
+  // Resize all internal vectors
   void resize(size_t size)
   {
     cell_ID.resize(size);
@@ -62,7 +67,44 @@ public:
     rng.resize(size);
   }
 
+   // Reserve capacity for all internal vectors
+   void reserve(size_t capacity)
+   {
+     cell_ID.reserve(capacity);
+     group.reserve(capacity);
+     source_type.reserve(capacity);
+     descriptors.reserve(capacity);
+     pos.reserve(capacity);
+     angle.reserve(capacity);
+     E.reserve(capacity);
+     E0.reserve(capacity);
+     life_dx.reserve(capacity);
+     rng.reserve(capacity);
+   }
+
+   // Clear all internal vectors
+   void clear()
+   {
+       cell_ID.clear();
+       group.clear();
+       source_type.clear();
+       descriptors.clear();
+       pos.clear();
+       angle.clear();
+       E.clear();
+       E0.clear();
+       life_dx.clear();
+       rng.clear();
+   }
+
+
+  // Add a photon from another PhotonArray at a specific index
   void add_photon(const PhotonArray &source, size_t index) {
+     // Check bounds
+     if (index >= source.size()) {
+         throw std::out_of_range("Index out of range in PhotonArray::add_photon");
+     }
+    // No need to get size, push_back handles appending
     cell_ID.push_back(source.cell_ID[index]);
     group.push_back(source.group[index]);
     source_type.push_back(source.source_type[index]);
@@ -72,32 +114,50 @@ public:
     E.push_back(source.E[index]);
     E0.push_back(source.E0[index]);
     life_dx.push_back(source.life_dx[index]);
-    rng.push_back(source.rng[index]);
+    rng.push_back(source.rng[index]); // Assumes RNG is copyable
   }
 
+  // Check if the array is empty (based on one representative vector)
   bool empty() const {return cell_ID.empty();}
 
+  // Get the number of photons (based on one representative vector)
   size_t size() const {return cell_ID.size();}
 
-  Photon operator [](size_t i) {
+  // Get a Photon object representing the data at index i (SoA -> AoS)
+  // Note: This creates a temporary Photon object (copy)
+  Photon get_photon(size_t i) const {
+     // Check bounds
+     if (i >= size()) {
+         throw std::out_of_range("Index out of range in PhotonArray::get_photon");
+     }
     Photon return_photon;
-    return_photon.set_source_type(source_type[i]);
-    return_photon.set_position(pos[i]);
-    return_photon.set_angle(angle[i]);
-    return_photon.set_E0(E0[i]);
-    return_photon.set_distance_to_census(life_dx[i]);
+    // Use setters to populate the Photon object
     return_photon.set_cell(cell_ID[i]);
     return_photon.set_group(group[i]);
-    return_photon.set_rng(rng[i]);
+    return_photon.set_source_type(source_type[i]);
+    return_photon.set_descriptor(static_cast<Constants::event_type>(descriptors[i]));
+    return_photon.set_position(pos[i]);
+    return_photon.set_angle(angle[i]);
+    // Need to set E0 first if set_E depends on it, or use a different setter
+    return_photon.set_E0(E0[i]); // Sets both E0 and E initially
+    return_photon.set_E(E[i]);   // Correct the current E
+    return_photon.set_distance_to_census(life_dx[i]);
+    return_photon.set_rng(rng[i]); // Assumes RNG is copyable
     return return_photon;
   }
 
+  // Insert photons from another PhotonArray at the end
   void insert(const PhotonArray &photons_to_add) {
      size_t original_size = size();
-     size_t new_size = original_size + photons_to_add.size();
-     resize(new_size);
+     size_t num_to_add = photons_to_add.size();
+     if (num_to_add == 0) return;
 
-    for (size_t i = 0; i < photons_to_add.cell_ID.size(); ++i) {
+     size_t new_size = original_size + num_to_add;
+     resize(new_size); // Resize all vectors first
+
+    // Copy data element by element
+    // Consider using std::copy for potentially better performance if vectors are contiguous
+    for (size_t i = 0; i < num_to_add; ++i) {
       cell_ID[original_size+i] = photons_to_add.cell_ID[i];
       group[original_size+i] = photons_to_add.group[i];
       source_type[original_size+i] = photons_to_add.source_type[i];
@@ -107,182 +167,67 @@ public:
       E[original_size+i] = photons_to_add.E[i];
       E0[original_size+i] = photons_to_add.E0[i];
       life_dx[original_size+i] = photons_to_add.life_dx[i];
-      rng[original_size+i] = photons_to_add.rng[i];
+      rng[original_size+i] = photons_to_add.rng[i]; // Assumes RNG is copyable
     }
   }
- 
-  // this copies out photon data 
-  PhotonArray get_sub_batch(const size_t batch_start, const size_t batch_end) {
+
+  // Create a *copy* of a sub-range of this PhotonArray
+  PhotonArray get_sub_batch(const size_t batch_start, const size_t batch_end) const {
+    // Validate range
+    if (batch_start >= size() || batch_end > size() || batch_start >= batch_end) {
+        // Return empty or throw error
+        // Returning empty is safer if this can happen (e.g., last batch)
+        if (batch_start == batch_end && batch_start <= size()) return PhotonArray(); // Allow empty batch
+        throw std::out_of_range("Invalid range in PhotonArray::get_sub_batch");
+    }
+
     size_t batch_size = batch_end - batch_start;
     PhotonArray batch_photons;
-    batch_photons.resize(batch_size);
-    for (size_t i = 0; i < batch_size; ++i) {
-      size_t idx = batch_start + i;
-      batch_photons.cell_ID[i] = cell_ID[idx];
-      batch_photons.group[i] = group[idx];
-      batch_photons.source_type[i] = source_type[idx];
-      batch_photons.descriptors[i] = descriptors[idx];
-      batch_photons.pos[i] = pos[idx];
-      batch_photons.angle[i] = angle[idx];
-      batch_photons.E[i] = E[idx];
-      batch_photons.E0[i] = E0[idx];
-      batch_photons.life_dx[i] = life_dx[idx];
-      batch_photons.rng[i] = rng[idx];
-    }
+    batch_photons.resize(batch_size); // Pre-allocate size
+
+    // Copy data for the sub-range
+    // Using std::copy for potentially better performance
+    std::copy(cell_ID.begin() + batch_start, cell_ID.begin() + batch_end, batch_photons.cell_ID.begin());
+    std::copy(group.begin() + batch_start, group.begin() + batch_end, batch_photons.group.begin());
+    std::copy(source_type.begin() + batch_start, source_type.begin() + batch_end, batch_photons.source_type.begin());
+    std::copy(descriptors.begin() + batch_start, descriptors.begin() + batch_end, batch_photons.descriptors.begin());
+    std::copy(pos.begin() + batch_start, pos.begin() + batch_end, batch_photons.pos.begin());
+    std::copy(angle.begin() + batch_start, angle.begin() + batch_end, batch_photons.angle.begin());
+    std::copy(E.begin() + batch_start, E.begin() + batch_end, batch_photons.E.begin());
+    std::copy(E0.begin() + batch_start, E0.begin() + batch_end, batch_photons.E0.begin());
+    std::copy(life_dx.begin() + batch_start, life_dx.begin() + batch_end, batch_photons.life_dx.begin());
+    std::copy(rng.begin() + batch_start, rng.begin() + batch_end, batch_photons.rng.begin()); // Assumes RNG is copyable
+
     return batch_photons;
   }
-};
 
-//==============================================================================
-/*!
- * \class Photon
- * \brief Contains position, direction, cell ID and energy for transport.
- *
- * Holds all of the internal state of a photon and provides functions for
- * sorting photons based on census and global cell ID.
- */
-//==============================================================================
-/*
-class Photon {
-public:
-  //! Constructor
-  Photon(PhotonArray &ray, size_t index) : ray(ray), index(index) {}
+   // Update this PhotonArray from a (potentially modified) sub-batch copy
+   void update_from_sub_batch(const PhotonArray& sub_batch, const size_t batch_start) {
+       size_t sub_batch_size = sub_batch.size();
+       if (sub_batch_size == 0) return;
 
-  //! Destructor
-  ~Photon() {}
+       size_t batch_end = batch_start + sub_batch_size;
 
-  //--------------------------------------------------------------------------//
-  // const functions                                                          //
-  //--------------------------------------------------------------------------//
+       // Validate range
+       if (batch_start >= size() || batch_end > size()) {
+           throw std::out_of_range("Invalid range in PhotonArray::update_from_sub_batch");
+       }
 
-  //! Check to see if photon energy weight is below cutoff fraction
-  GPU_HOST_DEVICE
-  bool below_cutoff(const double cutoff_fraction) const {
-    return (ray.E[index] / ray.E0[index] < cutoff_fraction);
-  }
-
-  GPU_HOST_DEVICE
-  inline double get_fraction() const {return ray.E[index] / ray.E0[index];}
-
-  //! Return global cell ID
-  GPU_HOST_DEVICE
-  inline uint32_t get_cell(void) const { return ray.cell_ID[index]; }
-
-  //! Return photon group
-  GPU_HOST_DEVICE
-  inline uint32_t get_group(void) const { return ray.group[index]; }
-
-  //! Return a constant pointer to the start of the particle position array
-  GPU_HOST_DEVICE
-  inline std::array<double,3> get_position(void) const { return ray.pos[index]; }
-
-  //! Return a constant pointer to the start of the particle direction array
-  GPU_HOST_DEVICE
-  inline std::array<double,3> get_angle(void) const { return ray.angle[index]; }
-
-  //! Get the particle's energy-weight
-  GPU_HOST_DEVICE
-  inline double get_E(void) const { return ray.E[index]; }
-
-  //! Get the partice's initial energy-weight
-  GPU_HOST_DEVICE
-  inline double get_E0(void) const { return ray.E0[index]; }
-
-  //! Get the distance to census (cm)
-  GPU_HOST_DEVICE
-  inline double get_distance_remaining(void) const { return ray.life_dx[index]; }
-
-  //! Print particle information
-  void print_info(const uint32_t &rank) const {
-    using std::cout;
-    using std::endl;
-    cout << "----Photon Info----\n";
-    cout << rank << " " << ray.pos[index][0] << " " << ray.pos[index][1] << " " << ray.pos[index][2]
-         << endl;
-    cout << "angle: " << ray.angle[index][0] << " " << ray.angle[index][1] << " " << ray.angle[index][2]
-         << endl;
-    cout << "Energy: " << ray.E[index] << " , Initial energy: " << ray.E0[index] << endl;
-    cout << "Cell ID: " << ray.cell_ID[index] << endl;
-  }
-
-  //! Override great than operator to sort
-  bool operator<(const Photon &compare) const {
-    return ray.cell_ID[index] < compare.get_cell();
-  }
-
-  GPU_HOST_DEVICE
-  Constants::event_type get_descriptor() {return static_cast<Constants::event_type>(ray.descriptors[index][0]);}
-
-  //--------------------------------------------------------------------------//
-  // non-const functions                                                      //
-  //--------------------------------------------------------------------------//
-
-  //! Update particle position by moving it a distance
-  GPU_HOST_DEVICE
-  inline void move(const double distance) {
-    for (int i = 0; i < 3; ++i)
-    {
-      ray.pos[index][i] += ray.angle[index][i] * distance;
-    }
-    ray.life_dx[index] -= distance;
-  }
-
-  inline uint32_t get_source_type() const {return ray.source_type[index];}
-  inline void set_source_type(uint32_t source_type_in) {ray.source_type[index] = source_type_in;}
-
-  //! Set the global cell ID
-  GPU_HOST_DEVICE
-  inline void set_cell(const uint32_t new_cell) { ray.cell_ID[index] = new_cell; }
-
-  //! Set the group of the photon
-  GPU_HOST_DEVICE
-  inline void set_group(const uint32_t new_group) { ray.group[index] = new_group; }
-
-  //! Set the initial energy-weight
-  inline void set_E0(const double E) {
-    ray.E0[index] = E;
-    ray.E[index] = E;
-  }
-
-  //! Set the current energy-weight
-  GPU_HOST_DEVICE
-  inline void set_E(const double E) { ray.E[index] = E; }
-
-  //! Set the distance to census (cm)
-  GPU_HOST_DEVICE
-  inline void set_distance_to_census(const double dist_remain) { ray.life_dx[index] = dist_remain; }
-
-  //! Set the angle of the photon
-  GPU_HOST_DEVICE
-  inline void set_angle(const std::array<double,3> &new_angle) { ray.angle[index] = new_angle;}
-
-  //! Set the spatial position of the photon
-  GPU_HOST_DEVICE
-  inline void set_position(const std::array<double, 3> &new_pos) { ray.pos[index] = new_pos;}
-
-  //! Reflect a photon about a plane aligned with the X, Y, or Z axes
-  GPU_HOST_DEVICE
-  inline void reflect(const uint32_t surface_cross) {
-    // reflect the photon over the surface it was crossing
-    int reflect_angle = surface_cross/2; // X -> 0, Y->1, Z->2
-    ray.angle[index][reflect_angle] = -ray.angle[index][reflect_angle];
-  }
-
-  GPU_HOST_DEVICE
-  void set_descriptor(const Constants::event_type descriptor) { ray.descriptors[index][0] = static_cast<unsigned char>(descriptor);}
-
-  GPU_HOST_DEVICE
-  RNG &get_rng() {return ray.rng[index];}
-
-  void set_rng(const RNG &rng) { ray.rng[index] = rng;}
-
-  //--------------------------------------------------------------------------//
-  // member data                                                              //
-  //--------------------------------------------------------------------------//
-private:
-  PhotonArray ray;
-  size_t index;
+       // Copy data back from the sub-batch into the original array
+       std::copy(sub_batch.cell_ID.begin(), sub_batch.cell_ID.end(), cell_ID.begin() + batch_start);
+       std::copy(sub_batch.group.begin(), sub_batch.group.end(), group.begin() + batch_start);
+       std::copy(sub_batch.source_type.begin(), sub_batch.source_type.end(), source_type.begin() + batch_start);
+       std::copy(sub_batch.descriptors.begin(), sub_batch.descriptors.end(), descriptors.begin() + batch_start);
+       std::copy(sub_batch.pos.begin(), sub_batch.pos.end(), pos.begin() + batch_start);
+       std::copy(sub_batch.angle.begin(), sub_batch.angle.end(), angle.begin() + batch_start);
+       std::copy(sub_batch.E.begin(), sub_batch.E.end(), E.begin() + batch_start);
+       std::copy(sub_batch.E0.begin(), sub_batch.E0.end(), E0.begin() + batch_start); // Usually E0 doesn't change, but copy for completeness
+       std::copy(sub_batch.life_dx.begin(), sub_batch.life_dx.end(), life_dx.begin() + batch_start);
+       std::copy(sub_batch.rng.begin(), sub_batch.rng.end(), rng.begin() + batch_start); // Copy back RNG state
+   }
 
 };
-*/
+
+// Remove the old Photon class definition that wrapped PhotonArray
+
 #endif // photon_array_h_
