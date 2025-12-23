@@ -224,6 +224,12 @@ endif()
 
 # set(DMAPP_DYNAMIC -Wl,--whole-archive,-ldmapp,--no-whole-archive)
 
+#------------------------------------------------------------------------------#
+# Targets
+file(GLOB headers *.h)
+add_executable(BRANSON main.cc ${headers})
+target_include_directories( BRANSON PRIVATE
+  $<BUILD_INTERFACE:${PROJECT_BINARY_DIR}> ${PROJECT_SOURCE_DIR}/pugixml/src/ ${PROJECT_SOURCE_DIR}/random123/ )
 
 if("${GPU_DBS_STRING}" STREQUAL "CUDA" )
   if(USE_CUDA)
@@ -302,12 +308,6 @@ else()
   message("GPU Options: Not a GPU build or GPU_DBS_STRING not recognized")
 endif()
 
-#------------------------------------------------------------------------------#
-# Targets
-file(GLOB headers *.h)
-add_executable(BRANSON main.cc ${headers})
-target_include_directories( BRANSON PRIVATE
-  $<BUILD_INTERFACE:${PROJECT_BINARY_DIR}> ${PROJECT_SOURCE_DIR}/pugixml/src/ ${PROJECT_SOURCE_DIR}/random123/ )
 list(APPEND branson_deps pugixml)
 
 if(OpenMP_FOUND)
