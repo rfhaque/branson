@@ -19,34 +19,6 @@ option(USE_OPENMP "Use OpenMP" FALSE)
 
 set(CMAKE_VERBOSE_MAKEFILE ON)
 
-find_package(MPI REQUIRED C CXX)
-
-message(STATUS "MPI_CXX_FOUND: ${MPI_CXX_FOUND}")
-message(STATUS "MPI_CXX_INCLUDE_PATH: ${MPI_CXX_INCLUDE_PATH}")
-message(STATUS "MPI_CXX_LIBRARIES: ${MPI_CXX_LIBRARIES}")
-message(STATUS "MPI_FOUND: ${MPI_FOUND}")
-message(STATUS "MPI_C_FOUND: ${MPI_C_FOUND}")
-message(STATUS "MPI_C_INCLUDE_PATH: ${MPI_C_INCLUDE_PATH}")
-message(STATUS "MPI_C_LIBRARIES: ${MPI_C_LIBRARIES}")
-message(STATUS "MPI_C_COMPILE_FLAGS: ${MPI_C_COMPILE_FLAGS}")
-message(STATUS "MPI_C_LINK_FLAGS: ${MPI_C_LINK_FLAGS}")
-
-if (TARGET MPI::MPI_CXX)
-  message(STATUS "Target MPI::MPI_C is defined")
-else()
-  message(STATUS "Target MPI::MPI_C is NOT defined")
-endif()
-
-if (TARGET MPI::MPI_C)
-  message(STATUS "Target MPI::MPI_C is defined")
-else()
-  message(STATUS "Target MPI::MPI_C is NOT defined")
-endif()
-
-list(APPEND branson_deps
-  MPI::MPI_C
-  MPI::MPI_CXX)
-
 if(USE_CUDA)
     set(GPU_DBS_STRING "CUDA" CACHE STRING "If CUDA is available, this variable is 'CUDA'")
     enable_language(CUDA)
@@ -82,6 +54,18 @@ project (BRANSON
   LANGUAGES CXX C ${GPU_DBS_STRING})
 
 get_property(_LANGUAGES_ GLOBAL PROPERTY ENABLED_LANGUAGES)
+
+find_package(MPI REQUIRED C CXX)
+
+list(APPEND branson_deps
+  MPI::MPI_C
+  MPI::MPI_CXX)
+
+if (TARGET MPI::MPI_C)
+  message(STATUS "Target MPI::MPI_C is defined")
+else()
+  message(STATUS "Target MPI::MPI_C is NOT defined")
+endif()
 
 message("Languages: ${_LANGUAGES_}")
 if((_LANGUAGES_ MATCHES CUDA OR _LANGUAGES_ MATCHES HIP) AND USE_GPU)
