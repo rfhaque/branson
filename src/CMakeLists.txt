@@ -21,6 +21,7 @@ set(CMAKE_VERBOSE_MAKEFILE ON)
 
 find_package(MPI REQUIRED)
 list(APPEND branson_deps
+  MPI::MPI_C
   MPI::MPI_CXX)
 
 if(USE_CUDA)
