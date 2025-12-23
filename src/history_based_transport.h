@@ -393,6 +393,7 @@ void transport_photon_history_aos_gpu(const uint32_t rank_cell_offset,
   } // end while alive
 }
 
+#ifdef USE_GPU
 __device__ inline void warp_atomic_addh(double *address, uint32_t cell_idx, double val) {
     // Get the mask of active threads in the warp
     const unsigned int active_mask = __activemask();
@@ -415,6 +416,7 @@ __device__ inline void warp_atomic_addh(double *address, uint32_t cell_idx, doub
       atomicAdd(address, subgroup_sum);
     }
 }
+#endif
 
 //----------------------------------------------------------------------------//
 // SoA Transport Function (GPU Device)
