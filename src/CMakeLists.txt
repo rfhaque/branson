@@ -61,12 +61,6 @@ list(APPEND branson_deps
   MPI::MPI_C
   MPI::MPI_CXX)
 
-if (TARGET MPI::MPI_C)
-  message(STATUS "Target MPI::MPI_C is defined")
-else()
-  message(STATUS "Target MPI::MPI_C is NOT defined")
-endif()
-
 message("Languages: ${_LANGUAGES_}")
 if((_LANGUAGES_ MATCHES CUDA OR _LANGUAGES_ MATCHES HIP) AND USE_GPU)
   message("CUDA/HIP module found (CUDA/HIP environment variables set) and USE_GPU is on, making GPU BRANSON")
@@ -231,35 +225,6 @@ endif()
 # set(DMAPP_DYNAMIC -Wl,--whole-archive,-ldmapp,--no-whole-archive)
 
 
-#------------------------------------------------------------------------------#
-# Targets
-file(GLOB headers *.h)
-add_executable(BRANSON main.cc ${headers})
-target_include_directories( BRANSON PRIVATE
-  $<BUILD_INTERFACE:${PROJECT_BINARY_DIR}> ${PROJECT_SOURCE_DIR}/pugixml/src/ ${PROJECT_SOURCE_DIR}/random123/ )
-set( branson_deps
-  MPI::MPI_CXX
-  MPI::MPI_C
-  pugixml)
-
-if(OpenMP_FOUND)
-  set(branson_deps "OpenMP::OpenMP_CXX;${branson_deps}")
-endif()
-
-if(METIS_FOUND)
-  set( branson_deps "METIS::metis;${branson_deps}")
-endif()
-
-if( VIZ_LIBRARIES_FOUND )
-  set( branson_deps "Silo::silo;${HDF5_LIBRARIES};${branson_deps}" )
-endif()
-
-#------------------------------------------------------------------------------#
-# Generate config.h
-
-configure_file(config.h.in ${PROJECT_BINARY_DIR}/config.h)
-#------------------------------------------------------------------------------#
-
 if("${GPU_DBS_STRING}" STREQUAL "CUDA" )
   if(USE_CUDA)
     find_package(CUDAToolkit REQUIRED)
@@ -336,6 +301,32 @@ elseif("${GPU_DBS_STRING}" STREQUAL "HIP" )
 else()
   message("GPU Options: Not a GPU build or GPU_DBS_STRING not recognized")
 endif()
+
+#------------------------------------------------------------------------------#
+# Targets
+file(GLOB headers *.h)
+add_executable(BRANSON main.cc ${headers})
+target_include_directories( BRANSON PRIVATE
+  $<BUILD_INTERFACE:${PROJECT_BINARY_DIR}> ${PROJECT_SOURCE_DIR}/pugixml/src/ ${PROJECT_SOURCE_DIR}/random123/ )
+list(APPEND branson_deps pugixml)
+
+if(OpenMP_FOUND)
+  set(branson_deps "OpenMP::OpenMP_CXX;${branson_deps}")
+endif()
+
+if(METIS_FOUND)
+  set( branson_deps "METIS::metis;${branson_deps}")
+endif()
+
+if( VIZ_LIBRARIES_FOUND )
+  set( branson_deps "Silo::silo;${HDF5_LIBRARIES};${branson_deps}" )
+endif()
+
+#------------------------------------------------------------------------------#
+# Generate config.h
+
+configure_file(config.h.in ${PROJECT_BINARY_DIR}/config.h)
+#------------------------------------------------------------------------------#
 
 target_link_libraries( BRANSON PRIVATE ${branson_deps} )
 
