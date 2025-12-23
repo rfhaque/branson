@@ -9,11 +9,27 @@
 # Enbable debug mode by passing -DCMAKE_BUILD_TYPE=Debug to CMake, default is
 # Release
 
-cmake_minimum_required (VERSION 3.11)
+cmake_minimum_required (VERSION 3.24)
 
+option(USE_CUDA "Use CUDA" FALSE)
+option(USE_HIP "Use HIP" FALSE)
 option(USE_GPU "user-set flag to compile in GPU code" FALSE)
+option(USE_CALIPER "Use Caliper" FALSE)
+option(USE_OPENMP "Use OpenMP" FALSE)
 
-if(DEFINED ENV{CUDADIR}
+set(CMAKE_VERBOSE_MAKEFILE ON)
+
+find_package(MPI REQUIRED)
+list(APPEND branson_deps
+  MPI::MPI_CXX)
+
+if(USE_CUDA)
+    set(GPU_DBS_STRING "CUDA" CACHE STRING "If CUDA is available, this variable is 'CUDA'")
+    enable_language(CUDA)
+elseif(USE_HIP)
+    set(GPU_DBS_STRING "HIP" CACHE STRING "If HIP is available, this variable is 'HIP'")
+    enable_language(HIP)
+elseif(DEFINED ENV{CUDADIR}
    OR DEFINED ENV{CUDACXX}
    OR DEFINED ENV{CUDA_HOME})
   if(USE_GPU)
@@ -57,7 +73,7 @@ endif()
 
 
 # Build system support files are located here.
-set( CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/config )
+set( CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/config ${CMAKE_MODULE_PATH})
 
 message( "
 This is ${CMAKE_PROJECT_NAME} v. ${PROJECT_VERSION}.
@@ -138,7 +154,6 @@ elseif (CMAKE_CXX_COMPILER_ID STREQUAL "IntelLLVM")
   set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -DR123_USE_GNU_UINT128=0")
 endif()
 
-
 #------------------------------------------------------------------------------#
 # Look for Third Party Libraries (metis, etc.)
 add_subdirectory(pugixml)
@@ -178,6 +193,29 @@ else()
 endif()
 message("\n")
 
+##############################################################################
+# caliper/adiak
+##############################################################################
+if(USE_CALIPER)
+  message(STATUS "Looking for caliper...")
+  find_package(caliper REQUIRED)
+  if(caliper_FOUND)
+    message(STATUS "Looking for caliper......found ${caliper_DIR}")
+    list(APPEND branson_deps
+      caliper)
+  endif()
+
+  message(STATUS "Looking for adiak...")
+  find_package(adiak REQUIRED)
+  if(adiak_FOUND)
+    message(STATUS "Looking for adiak......found ${adiak_DIR}")
+    list(APPEND branson_deps
+      adiak::adiak)
+  endif()
+else()
+  message(STATUS "Disabling caliper...")
+endif()
+
 #------------------------------------------------------------------------------#
 # Set up libraries for Cray RMA routines
 
@@ -207,10 +245,6 @@ if( VIZ_LIBRARIES_FOUND )
   set( branson_deps "Silo::silo;${HDF5_LIBRARIES};${branson_deps}" )
 endif()
 
-if(caliper_FOUND)
-  set( branson_deps "caliper;${branson_deps}")
-endif()
-
 #------------------------------------------------------------------------------#
 # Generate config.h
 
@@ -218,24 +252,78 @@ configure_file(config.h.in ${PROJECT_BINARY_DIR}/config.h)
 #------------------------------------------------------------------------------#
 
 if("${GPU_DBS_STRING}" STREQUAL "CUDA" )
-  message("Setting CUDA compiler options")
-  #set_target_properties(BRANSON PROPERTIES CUDA_ARCHITECTURES "90") # H100
-  #set_target_properties(BRANSON PROPERTIES CUDA_ARCHITECTURES "70") # V100
-  set_target_properties(BRANSON PROPERTIES CUDA_ARCHITECTURES "80") # A100
-  set_target_properties(BRANSON PROPERTIES CUDA_STANDARD 17)
-  string(APPEND CMAKE_CUDA_FLAGS " -g --expt-relaxed-constexpr --fmad=false -lineinfo")
-  string(APPEND CMAKE_CUDA_FLAGS " --expt-extended-lambda"  )
-  set_source_files_properties("main.cc" PROPERTIES LANGUAGE CUDA)
-elseif("${GPU_DBS_STRING}" STREQUAL "HIP" )
-  message("Setting HIP compiler options")
-  if(CMAKE_HIP_COMPILER MATCHES "CC")
-    set(CMAKE_HIP_FLAGS "-x hip")
+  if(USE_CUDA)
+    find_package(CUDAToolkit REQUIRED)
+    list(APPEND branson_deps
+      CUDA::cudart)
+
+    set(CMAKE_CUDA_HOST_COMPILER ${CMAKE_CXX_COMPILER})
+
+    if(NOT CMAKE_CUDA_COMPILER)
+      message(FATAL_ERROR "Unable to find the nvcc compiler. Please use"
+                          "CMAKE_CUDA_COMPILER to provide the nvcc compiler.")
+    endif()
+
+    set(CMAKE_CUDA_STANDARD ${CMAKE_CXX_STANDARD})
+    set(CMAKE_CUDA_STANDARD_REQUIRED ON)
+    set(CMAKE_CUDA_ARCHITECTURES "${CUDA_ARCH}")
+    string(APPEND CMAKE_CUDA_FLAGS "-g --expt-relaxed-constexpr --fmad=false -lineinfo")
+    string(APPEND CMAKE_CUDA_FLAGS "-expt-extended-lambda"  )
+    set_source_files_properties("main.cc" PROPERTIES LANGUAGE CUDA)
+    target_compile_definitions(BRANSON PRIVATE USE_GPU)
+    message("Making GPU(CUDA) BRANSON")
+  else()
+    message("Setting CUDA compiler options")
+    #set_target_properties(BRANSON PROPERTIES CUDA_ARCHITECTURES "90") # H100
+    #set_target_properties(BRANSON PROPERTIES CUDA_ARCHITECTURES "70") # V100
+    set_target_properties(BRANSON PROPERTIES CUDA_ARCHITECTURES "80") # A100
+    set_target_properties(BRANSON PROPERTIES CUDA_STANDARD 17)
+    string(APPEND CMAKE_CUDA_FLAGS " -g --expt-relaxed-constexpr --fmad=false -lineinfo")
+    string(APPEND CMAKE_CUDA_FLAGS " --expt-extended-lambda"  )
+    set_source_files_properties("main.cc" PROPERTIES LANGUAGE CUDA)
+
+    message("Making GPU(CUDA) BRANSON")
   endif()
-  set_target_properties(BRANSON PROPERTIES HIP_ARCHITECTURES "gfx942") # MI300
-  set_target_properties(BRANSON PROPERTIES HIP_STANDARD 17)
-  string(APPEND CMAKE_HIP_FLAGS " -g -mllvm=--disable-peephole")
-  #string(APPEND CMAKE_HIP_FLAGS " --expt-extended-lambda"  )
-  set_source_files_properties("main.cc" PROPERTIES LANGUAGE HIP)
+elseif("${GPU_DBS_STRING}" STREQUAL "HIP" )
+  if(USE_HIP)
+    if(NOT ROCM_PATH)
+      if(DEFINED ENV{ROCM_PATH})
+        set(ROCM_PATH $ENV{ROCM_PATH} CACHE PATH "Path to which ROCM has been installed")
+      else()
+        message(FATAL_ERROR "Unable to find rocm. Please use "
+                            "ROCM_PATH to provide the rocm installation.")
+      endif()
+    endif()
+    
+    set(CMAKE_HIP_COMPILER "${ROCM_PATH}/llvm/bin/clang++")
+    list(APPEND CMAKE_PREFIX_PATH "${ROCM_PATH}/lib/cmake")
+
+    find_package(hip REQUIRED)
+    list(APPEND branson_deps
+      hip::host
+      hip::device)
+
+    set(CMAKE_HIP_HOST_COMPILER ${CMAKE_CXX_COMPILER})
+
+    set(CMAKE_HIP_STANDARD ${CMAKE_CXX_STANDARD})
+    set(CMAKE_HIP_STANDARD_REQUIRED ON)
+    set(CMAKE_HIP_ARCHITECTURES "${HIP_ARCH}")
+    string(APPEND CMAKE_HIP_FLAGS "-g")
+    set_source_files_properties("main.cc" PROPERTIES LANGUAGE HIP)
+    set(CMAKE_HIP_FLAGS "-g ${CMAKE_HIP_FLAGS}")
+    target_compile_definitions(BRANSON PRIVATE USE_GPU)
+    message("Making GPU(HIP) BRANSON")
+  else()
+    message("Setting HIP compiler options")
+    if(CMAKE_HIP_COMPILER MATCHES "CC")
+      set(CMAKE_HIP_FLAGS "-x hip")
+    endif()
+    set_target_properties(BRANSON PROPERTIES HIP_ARCHITECTURES "gfx942") # MI300
+    set_target_properties(BRANSON PROPERTIES HIP_STANDARD 17)
+    string(APPEND CMAKE_HIP_FLAGS " -g -mllvm=--disable-peephole")
+    #string(APPEND CMAKE_HIP_FLAGS " --expt-extended-lambda"  )
+    set_source_files_properties("main.cc" PROPERTIES LANGUAGE HIP)
+  endif()
 else()
   message("GPU Options: Not a GPU build or GPU_DBS_STRING not recognized")
 endif()
@@ -260,7 +348,7 @@ endif()
 #------------------------------------------------------------------------------#
 # Targets for installation
 
-install(TARGETS BRANSON DESTINATION bin)
+install(TARGETS BRANSON DESTINATION ${CMAKE_INSTALL_BINDIR})
 
 #------------------------------------------------------------------------------#
 # End src/CMakeLists.txt
