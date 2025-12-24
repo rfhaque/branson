@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <set>
 #include <stdlib.h>
+#include <iostream>
 
 #include "config.h"
 
