@@ -6,9 +6,9 @@
 # flux: --exclusive
 # flux: --setattr=hugepages=512GB
 # flux: --setattr=gpumode=CPX
-# flux: --job-name=branson_1node_gpu
-# flux: --output=branson_%j.out
-# flux: --error=branson_%j.err
+# flux: --job-name=branson_1node_gpu_throughpu
+# flux: --output=branson_throughput_%j.out
+# flux: --error=branson_throughput_%j.err
 
 set -euo pipefail
 
@@ -18,7 +18,7 @@ echo
 
 module load rocm
 
-export RUN_NAME=branson-tuolumne-singlenode-gpu-release
+export RUN_NAME=branson-tuolumne-singlenode-gpu-throughput-release
 
 function clone() {
   cd ~
@@ -59,16 +59,14 @@ function run() {
   mkdir -p $RUN_NAME
   cd $RUN_NAME
 
-  echo "Ranks,GPU-per-Rank,FOM" >> results.txt
+  cp $BRANSON_INPUT .
 
-  for ranks in 1 2 4 8 16 24; do
-    flux run -N 1 -n $ranks -g 1 --setopt=mpibind=verbose:1 --exclusive ${BRANSON_BIN} ${BRANSON_INPUT} > ${ranks}_1.txt 2>&1
-    results $ranks 1 ${ranks}_1.txt
-  done
+  echo "Ranks,Particles,FOM" >> results.txt
 
-  for ranks in 1 2 4 8 16 24 32 48; do
-    flux run -N 1 -n $ranks -g 0 --setopt=mpibind=verbose:1 --exclusive ${BRANSON_BIN} ${BRANSON_INPUT} > ${ranks}_0.txt 2>&1
-    results $ranks 0 ${ranks}_0.txt
+  for p in 100000 200000 300000 400000 500000 600000 700000 800000 900000 1000000 2000000 3000000 4000000 5000000 6600000 10000000 13300000 20000000 50000000 100000000 200000000 300000000 400000000 500000000 600000000 700000000 800000000 900000000; do 
+    sed "s|<photons>.*</photons>|<photons>$p</photons>|" 3D_hohlraum_single_node.xml > 3D_hohlraum_single_node_${p}.xml; 
+    flux run -N 1 -n 48 -g 0 --setopt=mpibind=verbose:1 --exclusive /g/g14/jered/binaries/branson-tuolumne-singlenode-gpu-release/bin/BRANSON 3D_hohlraum_single_node_${p}.xml > ${p}.txt 2>&1;
+    results $p ${p}.txt
   done
 }
 
