@@ -65,7 +65,7 @@ function run() {
 
   for p in 100000 200000 300000 400000 500000 600000 700000 800000 900000 1000000 2000000 3000000 4000000 5000000 6600000 10000000 13300000 20000000 50000000 100000000 200000000 300000000 400000000 500000000 600000000 700000000 800000000 900000000; do 
     sed "s|<photons>.*</photons>|<photons>$p</photons>|" 3D_hohlraum_single_node.xml > 3D_hohlraum_single_node_${p}.xml; 
-    flux run -N 1 -n 48 -g 0 --setopt=mpibind=verbose:1 --exclusive /g/g14/jered/binaries/branson-tuolumne-singlenode-gpu-release/bin/BRANSON 3D_hohlraum_single_node_${p}.xml > ${p}.txt 2>&1;
+    flux run -N 1 -n 48 -g 0 --setopt=mpibind=verbose:1 --exclusive ${BRANSON_BIN} 3D_hohlraum_single_node_${p}.xml > ${p}.txt 2>&1;
     results 48 $p ${p}.txt
   done
 }
