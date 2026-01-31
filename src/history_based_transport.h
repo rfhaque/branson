@@ -671,6 +671,7 @@ void gpu_transport_photons(const uint32_t rank_cell_offset,
     std::vector<Photon> &cpu_photons, const Cell *device_cells_ptr, std::vector<Cell_Tally> &cpu_cell_tallies) {
 
 #ifdef USE_GPU
+  wrapped_cali_mark_begin("aos_gpu_transport_photons");
   size_t n_photons = cpu_photons.size();
   if (n_photons == 0) return; // No work to do
 
@@ -696,12 +697,14 @@ void gpu_transport_photons(const uint32_t rank_cell_offset,
   int n_blocks = (n_photons + n_threads - 1) / n_threads;
 
   // Launch kernel
+  wrapped_cali_mark_begin("aos kernel");
   gpu_history_transport_aos_kernel<<<n_blocks, n_threads>>>(
       rank_cell_offset, device_photons_ptr, device_cells_ptr, device_cell_tallies_ptr, n_photons);
 
   auto kernel_err = cudaGetLastError();
   Insist(!kernel_err, "CUDA/HIP error in history AoS kernel launch");
   auto sync_err = cudaDeviceSynchronize();
+  wrapped_cali_mark_end("aos kernel");
   Insist(!sync_err, "CUDA/HIP error synchronizing after history AoS kernel");
 
   // Copy particles back to host
@@ -717,6 +720,7 @@ void gpu_transport_photons(const uint32_t rank_cell_offset,
   Insist(!free_err, "error freeing device_photons_ptr");
   free_err = cudaFree(device_cell_tallies_ptr);
   Insist(!free_err, "error freeing device_cell_tallies_ptr");
+  wrapped_cali_mark_end("aos_gpu_transport_photons");
 #else
   // Provide a fallback or error if GPU is not enabled but this function is called
   std::cerr << "Warning: GPU transport called but CUDA/HIP is not enabled. Running on CPU." << std::endl;
@@ -738,6 +742,7 @@ void gpu_transport_photons(const uint32_t rank_cell_offset,
     PhotonArray &cpu_photons, const Cell *device_cells_ptr, std::vector<Cell_Tally> &cpu_cell_tallies) {
 
 #ifdef USE_GPU
+  wrapped_cali_mark_begin("soa_gpu_transport_photons");
   size_t n_photons = cpu_photons.size();
   if (n_photons == 0) return; // No work to do
 
@@ -811,6 +816,7 @@ void gpu_transport_photons(const uint32_t rank_cell_offset,
   int n_blocks = (n_photons + n_threads - 1) / n_threads;
 
   // Launch kernel
+  wrapped_cali_mark_begin("soa kernel");
   gpu_history_transport_soa_kernel<<<n_blocks, n_threads>>>(
       rank_cell_offset, d_cell_ID, d_group, d_descriptors, d_pos, d_angle,
       d_E, d_E0, d_life_dx, d_rng,
@@ -819,6 +825,7 @@ void gpu_transport_photons(const uint32_t rank_cell_offset,
   auto kernel_err = cudaGetLastError();
   Insist(!kernel_err, "CUDA/HIP error in history SoA kernel launch");
   auto sync_err = cudaDeviceSynchronize();
+  wrapped_cali_mark_end("soa kernel");
   Insist(!sync_err, "CUDA/HIP error synchronizing after history SoA kernel");
 
   // Copy SoA data back to host
@@ -866,6 +873,7 @@ void gpu_transport_photons(const uint32_t rank_cell_offset,
   if (free_err) std::cout<<"Error freeing d_rng"<<std::endl;
   free_err = cudaFree(d_cell_tallies_ptr);
   if (free_err) std::cout<<"Error freeing d_cell_tallies_ptr"<<std::endl;
+  wrapped_cali_mark_end("soa_gpu_transport_photons");
 #else
   // Provide a fallback or error if CUDA/HIP is not enabled but this function is called
   std::cerr << "Warning: GPU transport called but CUDA/HIP is not enabled. Running on CPU." << std::endl;

@@ -8,6 +8,7 @@
 #include "photon_array.h"
 #include "post_process_functions.h"
 #include "timer.h"
+#include "config.h"
 
 //! Use one of 8 avaialbe transport algorithms in DD or REP: CPU/GPU, EVENT/HISTORY, SoA/AoS
 template <typename Census_T>
@@ -28,6 +29,7 @@ batch_transport(const double next_dt, const bool gpu_available, const GPU_Setup 
   std::string hardware = "GPU";      // default, change to CPU if used
   std::string algorithm = "history"; // default, change to event if used
   t_transport.start_timer("batch transport");
+  wrapped_cali_mark_begin("batch transport");
   if (transport_algorithm == Constants::HISTORY) {
     // HISTORY: GPU
     if (gpu_setup.use_gpu_transporter() && gpu_available) {
@@ -117,6 +119,7 @@ batch_transport(const double next_dt, const bool gpu_available, const GPU_Setup 
       }
     } // EVENT: CPU
   }   // EVENT
+  wrapped_cali_mark_end("batch transport");
   t_transport.stop_timer("batch transport");
   if constexpr (std::is_same_v<Census_T, std::vector<Photon>>) {
     cout << hardware << ", " << algorithm << ", AoS, transport--particles: " << n_complete
