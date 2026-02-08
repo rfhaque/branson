@@ -27,6 +27,13 @@
 #include "replicated_driver.h"
 #include "timer.h"
 
+#ifdef USE_UMPIRE
+#define DEBUG
+#include <umpire/Umpire.hpp>
+#include <umpire/strategy/QuickPool.hpp>
+#undef DEBUG
+#endif
+
 using Constants::PARTICLE_PASS;
 using Constants::REPLICATED;
 using Constants::SOA;
