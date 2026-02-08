@@ -162,6 +162,12 @@ cudaError_t umpireFree(T* devPtr) {
   allocator.deallocate(devPtr);
   return cudaSuccess;
 }
+
+double getDeviceMemoryHighWatermark() {
+  auto &rm = umpire::ResourceManager::getInstance();
+  auto allocator = rm.getAllocator("BRANSON_DEVICE_POOL");
+  return ((double) allocator.getHighWatermark()) / (1024 * 1024 * 1024);
+}
 #endif
 
 //! Add addend to t, use atomicAdd if built on a CUDA device
