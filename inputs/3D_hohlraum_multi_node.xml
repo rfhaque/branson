@@ -15,8 +15,9 @@
     <n_omp_threads>1</n_omp_threads>
     <mesh_decomposition>METIS</mesh_decomposition>
     <batch_size>5000</batch_size>
-    <particle_message_size>10000</particle_message_size>
+    <particle_message_size>1000000</particle_message_size>
     <output_frequency>1</output_frequency>
+    <umpire_device_pool_size>16</umpire_device_pool_size>
     <write_silo>FALSE</write_silo>
   </common>
 

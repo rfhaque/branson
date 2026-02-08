@@ -27,13 +27,6 @@
 #include "replicated_driver.h"
 #include "timer.h"
 
-#ifdef USE_UMPIRE
-#define DEBUG
-#include <umpire/Umpire.hpp>
-#include <umpire/strategy/QuickPool.hpp>
-#undef DEBUG
-#endif
-
 using Constants::PARTICLE_PASS;
 using Constants::REPLICATED;
 using Constants::SOA;
@@ -84,6 +77,12 @@ int main(int argc, char **argv) {
     Input input(filename, mpi_types);
     if (mpi_info.get_rank() == 0)
       input.print_problem_info();
+
+#ifdef USE_GPU
+#ifdef USE_UMPIRE
+    makeUmpireDevicePool(input.get_umpire_device_pool_size());
+#endif
+#endif
 
     // IMC paramters setup
     IMC_Parameters imc_p(input);
