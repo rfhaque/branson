@@ -21,6 +21,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include "config.h"
 #include "post_process_functions.h"
 #include "history_based_transport.h"
 #include "gpu_setup.h"
@@ -66,6 +67,7 @@ Census_T  particle_pass_transport(
   // timing
   Timer t_transport;
   t_transport.start_timer("timestep_transport");
+  wrapped_cali_mark_begin("timestep_transport");
 
   // Number of particles to run between MPI communication
   const uint32_t dd_batch_size = imc_parameters.get_batch_size();
@@ -237,6 +239,7 @@ Census_T  particle_pass_transport(
   } // end while
 
   // record time of transport work for this rank
+  wrapped_cali_mark_end("timestep_transport");
   t_transport.stop_timer("timestep_transport");
 
   // wait for all ranks to finish then send empty photon messages, do this because it's possible
