@@ -154,12 +154,6 @@ public:
         use_gpu_transporter = 0;
       }
 
-#ifdef USE_GPU
-#ifdef USE_UMPIRE
-      umpire_device_pool_size = settings_node.child("umpire_device_pool_size").text().as_int();
-#endif
-#endif
-
       // use particle combing population control
       tempString = settings_node.child_value("use_combing");
       if (tempString == "FALSE")
@@ -837,12 +831,6 @@ public:
   int get_rng_seed() const { return seed; }
   //! Return the number of photons set in the input file to run
   uint64_t get_number_photons() const { return n_photons; }
-#ifdef USE_GPU
-#ifdef USE_UMPIRE
-  //! Return the device memory pool size in GB
-  uint32_t get_umpire_device_pool_size() const { return umpire_device_pool_size; }
-#endif
-#endif
   //! Return the batch size (particles to run between parallel processing)
   uint32_t get_batch_size() const { return batch_size; }
   //! Return the user requested number of particles in a message
@@ -928,12 +916,6 @@ private:
 
   // Debug parameters
   uint32_t output_freq; //!< How often to print temperature information
-
-#ifdef USE_GPU
-#ifdef USE_UMPIRE
-  uint32_t umpire_device_pool_size = 4; //!< Size (in GB) of the device memory pool
-#endif
-#endif
 
   // Bools
   bool use_comb;        //!< Comb census photons

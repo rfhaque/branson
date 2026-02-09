@@ -21,6 +21,7 @@
 #include <unordered_set>
 #include <vector>
 
+#include "config.h"
 #include "buffer.h"
 #include "mpi_types.h"
 #include "proto_mesh.h"
@@ -605,6 +606,7 @@ void decompose_mesh(Proto_Mesh &mesh, const MPI_Types &mpi_types,
   if (rank == 0)
     std::cout << "partitioning..." << std::endl;
   t_partition.start_timer("partition");
+  wrapped_cali_mark_begin("partition");
 
   // decomposition methods return a partition vector which is the rank of each cell
   std::vector<int> part;
@@ -642,13 +644,16 @@ void decompose_mesh(Proto_Mesh &mesh, const MPI_Types &mpi_types,
   // otherwise mesh is already partitioned (sets "new_cells" in mesh object)
   if (edgecut)
     exchange_cells_post_partitioning(rank, mpi_types, mesh, part);
+  wrapped_cali_mark_end("partition");
   t_partition.stop_timer("partition");
 
   // update the cell list on each processor
   mesh.set_post_decomposition_mesh_cells(part);
 
   t_remap.start_timer("remap");
+  wrapped_cali_mark_begin("remap");
   remap_cell_and_grip_indices_allreduce(mesh, rank, n_rank);
+  wrapped_cali_mark_end("remap");
   t_remap.stop_timer("remap");
 
   if (rank == 0) {

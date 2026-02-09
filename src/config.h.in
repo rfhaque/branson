@@ -26,7 +26,6 @@
 #cmakedefine CCS_NODE
 
 #cmakedefine USE_OPENMP
-#cmakedefine USE_UMPIRE
 
 // For faux multigroup array sizing
 #cmakedefine BRANSON_N_GROUPS @BRANSON_N_GROUPS@
@@ -76,22 +75,14 @@ static constexpr uint32_t WARP_SIZE=64;
 #define cudaDeviceReset hipDeviceReset
 #define cudaDeviceSynchronize hipDeviceSynchronize
 #define cudaError_t hipError_t
-#ifdef USE_UMPIRE
-#define cudaFree umpireFree
-#else
 #define cudaFree hipFree
-#endif
 #define cudaGetDevice hipGetDevice
 #define cudaGetDeviceCount hipGetDeviceCount
 #define cudaGetDeviceProperties hipGetDeviceProperties
 #define cudaGetErrorName hipGetErrorName
 #define cudaGetErrorString hipGetErrorString
 #define cudaGetLastError hipGetLastError
-#ifdef USE_UMPIRE
-#define cudaMalloc umpireMalloc
-#else
 #define cudaMalloc hipMalloc
-#endif
 #define cudaMemcpy hipMemcpy
 #define cudaMemcpyDeviceToHost hipMemcpyDeviceToHost
 #define cudaMemcpyHostToDevice hipMemcpyHostToDevice
@@ -102,11 +93,6 @@ static constexpr uint32_t WARP_SIZE=64;
 #endif // USE_HIP
 
 #ifdef USE_CUDA
-
-#ifdef USE_UMPIRE
-#define cudaFree umpireFree
-#define cudaMalloc umpireMalloc
-#endif
 
 #include <cuda.h>
 #include <cuda_runtime.h>
@@ -131,44 +117,6 @@ inline void Insist(const bool pass, const std::string &message) {
 #define GPU_DEVICE __device__
 #define GPU_KERNEL __global__
 #define CONSTANT __constant__
-
-#ifdef USE_UMPIRE
-#include <umpire/Umpire.hpp>
-#include <umpire/strategy/QuickPool.hpp>
-
-void makeUmpireDevicePool(int device_pool_size) {
-  auto &rm = umpire::ResourceManager::getInstance();
-  const char * allocator_name = "BRANSON_DEVICE_POOL";
-  size_t umpire_device_pool_size = ((size_t) device_pool_size) * 1024 * 1024 * 1024;
-  size_t umpire_dev_block_size = 512;
-  auto device_pool_allocator = rm.makeAllocator<umpire::strategy::QuickPool>(allocator_name, rm.getAllocator("DEVICE"), umpire_device_pool_size, umpire_dev_block_size);
-  // force allocation of GPU memory pool
-  void* tmp = device_pool_allocator.allocate(100);
-  device_pool_allocator.deallocate(tmp);
-}
-
-template<typename T>
-cudaError_t umpireMalloc(T** devPtr, size_t size) {
-  auto &rm = umpire::ResourceManager::getInstance();
-  auto allocator = rm.getAllocator("BRANSON_DEVICE_POOL");
-  *devPtr = (T*) allocator.allocate(size);
-  return cudaSuccess;
-}
-
-template<typename T>
-cudaError_t umpireFree(T* devPtr) {
-  auto &rm = umpire::ResourceManager::getInstance();
-  auto allocator = rm.getAllocator("BRANSON_DEVICE_POOL");
-  allocator.deallocate(devPtr);
-  return cudaSuccess;
-}
-
-double getDeviceMemoryHighWatermark() {
-  auto &rm = umpire::ResourceManager::getInstance();
-  auto allocator = rm.getAllocator("BRANSON_DEVICE_POOL");
-  return ((double) allocator.getHighWatermark()) / (1024 * 1024 * 1024);
-}
-#endif
 
 //! Add addend to t, use atomicAdd if built on a CUDA device
 template <class T>

@@ -11,7 +11,6 @@
 
 cmake_minimum_required (VERSION 3.24)
 
-option(USE_UMPIRE "Use Umpire" FALSE)
 option(USE_CUDA "Use CUDA" FALSE)
 option(USE_HIP "Use HIP" FALSE)
 option(USE_GPU "user-set flag to compile in GPU code" FALSE)
@@ -155,17 +154,6 @@ elseif (CMAKE_CXX_COMPILER_ID STREQUAL "IntelLLVM")
   set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -DR123_USE_GNU_UINT128=0")
 endif()
 
-##############################################################################
-# umpire
-##############################################################################
-if(USE_CUDA OR USE_HIP)
-  if(USE_UMPIRE)
-    message(STATUS "Looking for umpire...")
-    find_package(umpire REQUIRED)
-    message(STATUS "Looking for umpire......found ${umpire_DIR}")
-    list(APPEND branson_deps umpire)
-  endif()
-endif()
 
 #------------------------------------------------------------------------------#
 # Look for Third Party Libraries (metis, etc.)
