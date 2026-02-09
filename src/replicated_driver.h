@@ -17,7 +17,6 @@
 #include <mpi.h>
 #include <vector>
 
-#include "config.h"
 #include "census_functions.h"
 #include "info.h"
 #include "imc_parameters.h"
@@ -68,7 +67,6 @@ void imc_replicated_driver(Mesh &mesh, IMC_State &imc_state,
     // setup source
     Timer t_source;
     t_source.start_timer("source");
-    wrapped_cali_mark_begin("source");
     if (imc_state.get_step() == 1)
       census_photons = make_initial_census_photons<Census_T>(imc_state.get_dt(), mesh, rank, seed, n_user_photons, global_source_energy);
     imc_state.set_pre_census_E(get_photon_list_E(census_photons));
@@ -76,7 +74,6 @@ void imc_replicated_driver(Mesh &mesh, IMC_State &imc_state,
     auto all_photons = make_photons<Census_T>(imc_state.get_dt(), mesh, rank, imc_state.get_step(), seed, n_user_photons, global_source_energy);
     // add the census photons
     join_photon_arrays(all_photons,census_photons);
-    wrapped_cali_mark_end("source");
     t_source.stop_timer("source");
     if (rank ==0)
       std::cout<<"source time: "<<t_source.get_time("source")<<std::endl;

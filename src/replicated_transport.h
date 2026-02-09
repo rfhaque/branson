@@ -9,7 +9,6 @@
 #include <vector>
 #include <type_traits> // Required for std::is_same_v
 
-#include "config.h"
 #include "RNG.h"
 #include "constants.h"
 #include "gpu_setup.h"
@@ -133,7 +132,6 @@ Census_T replicated_transport(
   // timing
   Timer t_transport;
   t_transport.start_timer("timestep transport");
-  wrapped_cali_mark_begin("timestep transport");
 
   //------------------------------------------------------------------------//
   // main transport loop
@@ -157,7 +155,6 @@ Census_T replicated_transport(
   }
 
   // record time of transport work for this rank
-  wrapped_cali_mark_end("timestep transport");
   t_transport.stop_timer("timestep transport");
 
   // wait for all ranks to finish
