@@ -161,8 +161,8 @@ int main(int argc, char **argv) {
         imc_state.get_photons_per_second_fom(imc_p.get_n_user_photons())<<endl;
 #ifdef USE_GPU
 #ifdef USE_UMPIRE
-      cout<<"Umpire device memory pool size: "<<input.get_umpire_device_pool_size()<<endl;
-      cout<<"Umpire device memory high water mark: "<<getDeviceMemoryHighWatermark()<<endl;
+      cout<<"Umpire device memory pool size: "<<input.get_umpire_device_pool_size()<<" GB"<<endl;
+      cout<<"Umpire device memory high water mark: "<<getDeviceMemoryHighWatermark()<<" GB"<<endl;
 #endif
 #endif
     }
