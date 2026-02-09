@@ -846,8 +846,6 @@ void gpu_transport_photons(const uint32_t rank_cell_offset,
   // Free device memory
   auto free_err = cudaFree(d_cell_ID);
   if (free_err) std::cout<<"Error freeing d_cell_ID"<<std::endl;
-  free_err = cudaFree(d_cell_tallies_ptr);
-  if (free_err) std::cout<<"Error freeing d_cell_tallies"<<std::endl;
   free_err = cudaFree(d_group);
   if (free_err) std::cout<<"Error freeing d_group"<<std::endl;
   free_err = cudaFree(d_descriptors);
