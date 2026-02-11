@@ -147,16 +147,14 @@ void makeUmpireDevicePool(int device_pool_size) {
   device_pool_allocator.deallocate(tmp);
 }
 
-template<typename T>
-cudaError_t umpireMalloc(T** devPtr, size_t size) {
+cudaError_t umpireMalloc(void** devPtr, size_t size) {
   auto &rm = umpire::ResourceManager::getInstance();
   auto allocator = rm.getAllocator("BRANSON_DEVICE_POOL");
-  *devPtr = (T*) allocator.allocate(size);
+  *devPtr = allocator.allocate(size);
   return cudaSuccess;
 }
 
-template<typename T>
-cudaError_t umpireFree(T* devPtr) {
+cudaError_t umpireFree(void* devPtr) {
   auto &rm = umpire::ResourceManager::getInstance();
   auto allocator = rm.getAllocator("BRANSON_DEVICE_POOL");
   allocator.deallocate(devPtr);

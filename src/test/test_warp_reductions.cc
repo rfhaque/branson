@@ -61,7 +61,7 @@ int test_inc_ballot_all_true() {
 
   std::cout<<"alloc"<<std::endl;
   unsigned int* d_counter;
-  auto err = cudaMalloc(&d_counter, sizeof(unsigned int));
+  auto err = cudaMalloc((void**)&d_counter, sizeof(unsigned int));
   Insist(!err, "error in malloc");
   err = cudaMemset(d_counter, 0, sizeof(unsigned int));
   Insist(!err, "error in memset");
