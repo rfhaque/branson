@@ -519,6 +519,7 @@ public:
       MPI_Bcast(&n_photons, 1, MPI_UNSIGNED_LONG, 0, MPI_COMM_WORLD);
       MPI_Bcast(all_doubles.data(), all_doubles.size(), MPI_DOUBLE, 0, MPI_COMM_WORLD);
       MPI_Bcast(regions.data(), n_regions, MPI_Region, 0, MPI_COMM_WORLD);
+      MPI_Bcast(&umpire_device_pool_size, 1, MPI_UNSIGNED, 0, MPI_COMM_WORLD);
 
       vector<uint32_t> division_key;
       vector<uint32_t> region_at_division;
@@ -594,6 +595,7 @@ public:
       // region processing (broadcast directly into member variable)
       regions.resize(n_regions);
       MPI_Bcast(&regions[0], n_regions, MPI_Region, 0, MPI_COMM_WORLD);
+      MPI_Bcast(&umpire_device_pool_size, 1, MPI_UNSIGNED, 0, MPI_COMM_WORLD);
 
       vector<uint32_t> division_key(n_divisions);
       vector<uint32_t> region_at_division(n_divisions);
