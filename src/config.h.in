@@ -26,7 +26,6 @@
 #cmakedefine CCS_NODE
 
 #cmakedefine USE_OPENMP
-#cmakedefine USE_UMPIRE
 
 // For faux multigroup array sizing
 #cmakedefine BRANSON_N_GROUPS @BRANSON_N_GROUPS@
@@ -76,22 +75,14 @@ static constexpr uint32_t WARP_SIZE=64;
 #define cudaDeviceReset hipDeviceReset
 #define cudaDeviceSynchronize hipDeviceSynchronize
 #define cudaError_t hipError_t
-#ifdef USE_UMPIRE
-#define cudaFree umpireFree
-#else
 #define cudaFree hipFree
-#endif
 #define cudaGetDevice hipGetDevice
 #define cudaGetDeviceCount hipGetDeviceCount
 #define cudaGetDeviceProperties hipGetDeviceProperties
 #define cudaGetErrorName hipGetErrorName
 #define cudaGetErrorString hipGetErrorString
 #define cudaGetLastError hipGetLastError
-#ifdef USE_UMPIRE
-#define cudaMalloc umpireMalloc
-#else
 #define cudaMalloc hipMalloc
-#endif
 #define cudaMemcpy hipMemcpy
 #define cudaMemcpyDeviceToHost hipMemcpyDeviceToHost
 #define cudaMemcpyHostToDevice hipMemcpyHostToDevice
@@ -102,11 +93,6 @@ static constexpr uint32_t WARP_SIZE=64;
 #endif // USE_HIP
 
 #ifdef USE_CUDA
-
-#ifdef USE_UMPIRE
-#define cudaFree umpireFree
-#define cudaMalloc umpireMalloc
-#endif
 
 #include <cuda.h>
 #include <cuda_runtime.h>

@@ -68,6 +68,7 @@ int main(int argc, char **argv) {
     Timer timers;
 
     timers.start_timer("Total");
+    wrapped_cali_mark_begin("Total");
 
     // make MPI types object
     MPI_Types mpi_types;
@@ -77,12 +78,6 @@ int main(int argc, char **argv) {
     Input input(filename, mpi_types);
     if (mpi_info.get_rank() == 0)
       input.print_problem_info();
-
-#ifdef USE_GPU
-#ifdef USE_UMPIRE
-    makeUmpireDevicePool(input.get_umpire_device_pool_size());
-#endif
-#endif
 
     // IMC paramters setup
     IMC_Parameters imc_p(input);
@@ -149,6 +144,7 @@ int main(int argc, char **argv) {
       exit(EXIT_FAILURE);
     }
 
+    wrapped_cali_mark_end("Total");
     timers.stop_timer("Total");
 
     if (mpi_info.get_rank() == 0) {
@@ -159,12 +155,6 @@ int main(int argc, char **argv) {
       cout<<"Total transport: "<<imc_state.get_total_transport_time()<<endl;
       cout<<"Photons Per Second (FOM): "<<
         imc_state.get_photons_per_second_fom(imc_p.get_n_user_photons())<<endl;
-#ifdef USE_GPU
-#ifdef USE_UMPIRE
-      cout<<"Umpire device memory pool size: "<<input.get_umpire_device_pool_size()<<" GB"<<endl;
-      cout<<"Umpire device memory high water mark: "<<getDeviceMemoryHighWatermark()<<" GB"<<endl;
-#endif
-#endif
     }
 
   } // end main loop scope, objects destroyed here
