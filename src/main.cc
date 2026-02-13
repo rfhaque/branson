@@ -68,6 +68,7 @@ int main(int argc, char **argv) {
     Timer timers;
 
     timers.start_timer("Total");
+    wrapped_cali_mark_begin("Total");
 
     // make MPI types object
     MPI_Types mpi_types;
@@ -143,6 +144,7 @@ int main(int argc, char **argv) {
       exit(EXIT_FAILURE);
     }
 
+    wrapped_cali_mark_end("Total");
     timers.stop_timer("Total");
 
     if (mpi_info.get_rank() == 0) {
