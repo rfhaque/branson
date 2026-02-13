@@ -1360,6 +1360,8 @@ void gpu_event_transport_photons(const uint32_t rank_cell_offset,
   if (free_err) std::cout<<"Error freeing d_f"<<std::endl;
   free_err = cudaFree(d_next_active_count_atomic);
   if (free_err) std::cout<<"Error freeing d_next_avtive_count_atomic"<<std::endl;
+  free_err = cudaFree(d_local_cell_indices);
+  if (free_err) std::cout<<"Error freeing d_local_cell_indices"<<std::endl;
   std::cout<<"about to exit event transport loop"<<std::endl;
 }
 
