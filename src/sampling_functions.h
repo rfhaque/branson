@@ -19,7 +19,7 @@
 #include "cell.h"
 
 //! Set an input array to a random position within a cell
-inline std::array<double, 3> get_uniform_position_in_cell(const Cell &cell, RNG &rng)  {
+GPU_HOST_DEVICE inline std::array<double, 3> get_uniform_position_in_cell(const Cell &cell, RNG &rng)  {
   auto nodes = cell.get_node_array();
   std::array<double, 3> pos{0.0, 0.0, 0.0};
   pos[0] = nodes[0] + rng.generate_random_number() * (nodes[1] - nodes[0]);
@@ -29,7 +29,7 @@ inline std::array<double, 3> get_uniform_position_in_cell(const Cell &cell, RNG 
 }
 
 //! Set an input array to a random position within a cell
-inline std::array<double, 3>  get_uniform_position_on_face(const Cell &cell, RNG &rng, int face) {
+GPU_HOST_DEVICE inline std::array<double, 3>  get_uniform_position_on_face(const Cell &cell, RNG &rng, int face) {
   auto nodes = cell.get_node_array();
   std::array<double, 3> face_pos{0.0, 0.0, 0.0};
   if (face ==0 || face ==1) {
@@ -91,7 +91,7 @@ inline std::array<double,3> get_stratified_angle( RNG &rng, uint32_t isample,
 }
 
 //! Set angle on face given input array and RNG
-inline std::array<double, 3> get_source_angle_on_face( RNG &rng, int face) {
+GPU_HOST_DEVICE inline std::array<double, 3> get_source_angle_on_face( RNG &rng, int face) {
   using Constants::pi;
   using std::cos;
   using std::sin;

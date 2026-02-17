@@ -27,10 +27,10 @@
 
 
 template <typename Census_T>
-std::tuple<uint64_t, double, double> post_process_photons(const double next_dt, Census_T &all_photons, Census_T &census_list, const Mesh &mesh, std::vector<std::vector<Photon>> &send_list);
+std::tuple<uint64_t, double, double> post_process_photons(const double next_dt, Census_T &all_photons, const Mesh &mesh, std::vector<std::vector<Photon>> &send_list);
 
 template <>
-std::tuple<uint64_t, double, double> post_process_photons<std::vector<Photon>>(const double next_dt, std::vector<Photon> &all_photons, std::vector<Photon> &census_list, const Mesh &mesh, std::vector<std::vector<Photon>> &send_list) {
+std::tuple<uint64_t, double, double> post_process_photons<std::vector<Photon>>(const double next_dt, std::vector<Photon> &all_photons, const Mesh &mesh, std::vector<std::vector<Photon>> &send_list) {
   uint64_t n_complete = 0.0;
   double census_E{0.0};
   double exit_E{0.0};
@@ -48,7 +48,7 @@ std::tuple<uint64_t, double, double> post_process_photons<std::vector<Photon>>(c
       break;
     case Constants::event_type::CENSUS:
       phtn.set_distance_to_census(Constants::c*next_dt);
-      census_list.push_back(phtn);
+      phtn.set_source_type(0); // 0 is census
       census_E+=phtn.get_E();
       n_complete++;
       break;
@@ -63,7 +63,7 @@ std::tuple<uint64_t, double, double> post_process_photons<std::vector<Photon>>(c
 }
 
 template <>
-std::tuple<uint64_t, double, double>  post_process_photons<PhotonArray>(const double next_dt, PhotonArray &all_photons, PhotonArray &census_list, const Mesh &mesh, std::vector<std::vector<Photon>> &send_list) {
+std::tuple<uint64_t, double, double>  post_process_photons<PhotonArray>(const double next_dt, PhotonArray &all_photons, const Mesh &mesh, std::vector<std::vector<Photon>> &send_list) {
   uint64_t n_complete = 0.0;
   double census_E{0.0};
   double exit_E{0.0};
@@ -82,6 +82,7 @@ std::tuple<uint64_t, double, double>  post_process_photons<PhotonArray>(const do
       break;
     case Constants::event_type::CENSUS:
       all_photons.life_dx[i] = Constants::c*next_dt;
+      all_photons.source_type[i] = 0; // 0 is census
       census_E+=all_photons.E[i];
       census_count++;
       n_complete++;
@@ -92,27 +93,6 @@ std::tuple<uint64_t, double, double>  post_process_photons<PhotonArray>(const do
       send_list[i_b].push_back( all_photons.get_photon(i));
       break;
     } // switch(descriptor)
-  }
-
-  // append census photons on to census list
-  auto old_census_size = census_list.size();
-  auto new_census_size = old_census_size + census_count;
-  census_list.resize(new_census_size);
-  auto census_index = old_census_size;
-  for ( size_t i = 0; i < all_photons.cell_ID.size(); ++i) {
-    if (static_cast<Constants::event_type>(all_photons.descriptors[i]) == Constants::event_type::CENSUS){
-      census_list.cell_ID[census_index] = all_photons.cell_ID[i];
-      census_list.group[census_index] = all_photons.group[i];
-      census_list.source_type[census_index] = all_photons.source_type[i];
-      census_list.descriptors[census_index] = all_photons.descriptors[i];
-      census_list.pos[census_index] = all_photons.pos[i];
-      census_list.angle[census_index] = all_photons.angle[i];
-      census_list.E[census_index] = all_photons.E[i];
-      census_list.E0[census_index] = all_photons.E0[i];
-      census_list.life_dx[census_index] = all_photons.life_dx[i];
-      census_list.rng[census_index] = all_photons.rng[i];
-      census_index++;
-    }
   }
   return {n_complete, exit_E, census_E};
 }

@@ -45,6 +45,35 @@ double get_photon_list_E(const std::vector<Photon> &photons) {
   return total_E;
 }
 
+double get_photon_list_census_E(const PhotonArray &photon_array) {
+  double total_E = 0.0;
+  for (size_t i = 0; i < photon_array.E.size(); ++i)
+  {
+    if(photon_array.source_type[i] == 0) {
+      total_E += photon_array.E[i];
+    }
+  }
+  return total_E;
+}
+
+double get_photon_list_census_E(const std::vector<Photon> &photons) {
+  double total_E = 0.0;
+  for (auto const &iphtn : photons) {
+    total_E += (iphtn.get_source_type() == 0) ? iphtn.get_E() : 0.0;
+  }
+  return total_E;
+}
+
+void remove_inactive_photons(PhotonArray &photons) {
+  photons.remove_inactive_particles();
+}
+
+void remove_inactive_photons(std::vector<Photon> &photons) {
+  auto new_end = std::remove_if(photons.begin(), photons.end(), [] (const Photon &iphoton) {
+    return iphoton.get_descriptor() != Constants::CENSUS;});
+  photons.erase(new_end, photons.end());
+}
+
 void comb_photons(std::vector<Photon> &census_photons,
                   int64_t max_census_photons, RNG *rng) {
   std::unordered_map<uint32_t, uint32_t> cell_census_count;

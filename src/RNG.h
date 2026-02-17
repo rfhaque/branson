@@ -153,7 +153,7 @@ public:
    */
   RNG() {}
 
-  RNG(const uint32_t seed, const uint64_t streamnum) {
+  GPU_HOST_DEVICE inline RNG(const uint32_t seed, const uint64_t streamnum) {
   // Low bits of the counter.
   data[0] = 0;
 
@@ -168,8 +168,7 @@ public:
   }
 
   //! Return a random double in the interval (0, 1).
-  GPU_HOST_DEVICE
-  double generate_random_number() const { return rtt_rng::_ran(data); }
+  GPU_HOST_DEVICE inline double generate_random_number() const { return rtt_rng::_ran(data); }
 
   //! Return the stream number.
   uint64_t get_num() const { return data[2]; }

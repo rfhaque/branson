@@ -13,10 +13,10 @@
 //! Use one of 8 avaialbe transport algorithms in DD or REP: CPU/GPU, EVENT/HISTORY, SoA/AoS
 template <typename Census_T>
 std::tuple<uint64_t, double, double>
-batch_transport(const double next_dt, const bool gpu_available, const GPU_Setup &gpu_setup,
+batch_transport(const double next_dt, const bool gpu_available, const GPU_Setup<Census_T> &gpu_setup,
                 const IMC_Parameters &imc_parameters,
                 const uint32_t rank_cell_offset, const Mesh &mesh,
-                Census_T &all_photons, Census_T &census_list,
+                Census_T &all_photons,
                 std::vector<std::vector<Photon>> &phtn_send_buffer,
                 std::vector<Cell_Tally> &cell_tallies, Timer &t_transport) {
   using std::cout;
@@ -51,7 +51,7 @@ batch_transport(const double next_dt, const bool gpu_available, const GPU_Setup 
                                     n_omp_threads);
     } // HISTORY: CPU
     auto [batch_complete, batch_exit_E, batch_census_E] =
-        post_process_photons(next_dt, all_photons, census_list, mesh, phtn_send_buffer);
+        post_process_photons(next_dt, all_photons, mesh, phtn_send_buffer);
     n_complete += batch_complete;
     exit_E += batch_exit_E;
     census_E += batch_census_E;
@@ -73,7 +73,7 @@ batch_transport(const double next_dt, const bool gpu_available, const GPU_Setup 
       gpu_event_transport_photons(rank_cell_offset, all_photons, gpu_setup.get_device_cells_ptr(),
                                   cell_tallies, emission_groups);
       auto [batch_complete, batch_exit_E, batch_census_E] =
-          post_process_photons(next_dt, all_photons, census_list, mesh, phtn_send_buffer);
+          post_process_photons(next_dt, all_photons, mesh, phtn_send_buffer);
 
       n_complete += batch_complete;
       exit_E += batch_exit_E;
@@ -98,7 +98,7 @@ batch_transport(const double next_dt, const bool gpu_available, const GPU_Setup 
           cpu_event_transport_photons(rank_cell_offset, batch_photons, mesh.get_cells(),
                                       cell_tallies, n_omp_threads, emission_groups);
           auto [batch_complete, batch_exit_E, batch_census_E] =
-              post_process_photons(next_dt, batch_photons, census_list, mesh, phtn_send_buffer);
+              post_process_photons(next_dt, batch_photons, mesh, phtn_send_buffer);
           n_complete += batch_complete;
           exit_E += batch_exit_E;
           census_E += batch_census_E;
@@ -108,7 +108,7 @@ batch_transport(const double next_dt, const bool gpu_available, const GPU_Setup 
           cpu_event_transport_photons(rank_cell_offset, batch_photons, mesh.get_cells(),
                                       cell_tallies, n_omp_threads, emission_groups);
           auto [batch_complete, batch_exit_E, batch_census_E] =
-              post_process_photons(next_dt, batch_photons, census_list, mesh, phtn_send_buffer);
+              post_process_photons(next_dt, batch_photons, mesh, phtn_send_buffer);
           n_complete += batch_complete;
           exit_E += batch_exit_E;
           census_E += batch_census_E;

@@ -131,13 +131,6 @@ public:
     return min_dist;
   }
 
-  //! Set position array given an RNG
-  inline void uniform_position_in_cell(RNG *rng, double *pos) const {
-    pos[0] = nodes[0] + rng->generate_random_number() * (nodes[1] - nodes[0]);
-    pos[1] = nodes[2] + rng->generate_random_number() * (nodes[3] - nodes[2]);
-    pos[2] = nodes[4] + rng->generate_random_number() * (nodes[5] - nodes[4]);
-  }
-
   //! Determine if position is inside a cell (diagnostic only)
   bool check_in_cell(const std::array<double,3> &pos) const {
     bool in_cell = true;
@@ -151,7 +144,7 @@ public:
   }
 
   //! Return node array (for setting up work packets)
-  inline const double *get_node_array(void) const { return nodes.data(); }
+  GPU_HOST_DEVICE inline double const * get_node_array(void) const { return nodes.data(); }
 
   //! Return SILO index (for plotting only)
   inline uint32_t get_silo_index(void) const { return silo_index; }

@@ -17,6 +17,7 @@
     <batch_size>5000</batch_size>
     <particle_message_size>10000</particle_message_size>
     <output_frequency>1</output_frequency>
+    <umpire_device_pool_size>16</umpire_device_pool_size>
     <write_silo>FALSE</write_silo>
   </common>
 
