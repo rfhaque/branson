@@ -154,6 +154,12 @@ public:
         use_gpu_transporter = 0;
       }
 
+#ifdef USE_GPU
+#ifdef USE_UMPIRE
+      umpire_device_pool_size = settings_node.child("umpire_device_pool_size").text().as_int();
+#endif
+#endif
+
       // use particle combing population control
       tempString = settings_node.child_value("use_combing");
       if (tempString == "FALSE")
@@ -190,7 +196,7 @@ public:
         dd_mode = REPLICATED;
       }
 
-      // particle storage type 
+      // particle storage type
       tempString = settings_node.child_value("particle_storage");
       if (tempString == "AOS")
         particle_storage = AOS;
@@ -202,7 +208,7 @@ public:
         particle_storage = AOS;
       }
 
-      // particle storage type 
+      // particle storage type
       tempString = settings_node.child_value("particle_algorithm");
       if (tempString == "EVENT")
         particle_algorithm = EVENT;
@@ -501,7 +507,7 @@ public:
                             use_gpu_transporter};
     vector<uint32_t> all_uint = {seed, dd_mode, decomp_mode, particle_storage, particle_algorithm,
                                   n_omp_threads, output_freq, batch_size, particle_message_size,
-                                  n_divisions, n_global_x_cells, n_global_y_cells, n_global_z_cells, 
+                                  n_divisions, n_global_x_cells, n_global_y_cells, n_global_z_cells,
                                   n_regions, n_x_div, n_y_div, n_z_div};
 
     vector<double> all_doubles = {tStart, dt, tFinish, tMult,  dtMax, T_source};
@@ -519,8 +525,11 @@ public:
       MPI_Bcast(&n_photons, 1, MPI_UNSIGNED_LONG, 0, MPI_COMM_WORLD);
       MPI_Bcast(all_doubles.data(), all_doubles.size(), MPI_DOUBLE, 0, MPI_COMM_WORLD);
       MPI_Bcast(regions.data(), n_regions, MPI_Region, 0, MPI_COMM_WORLD);
+      #ifdef USE_GPU
+      #ifdef USE_UMPIRE
       MPI_Bcast(&umpire_device_pool_size, 1, MPI_UNSIGNED, 0, MPI_COMM_WORLD);
-
+      #endif
+      #endif
       vector<uint32_t> division_key;
       vector<uint32_t> region_at_division;
       for (auto rmap : region_map) {
@@ -595,7 +604,11 @@ public:
       // region processing (broadcast directly into member variable)
       regions.resize(n_regions);
       MPI_Bcast(&regions[0], n_regions, MPI_Region, 0, MPI_COMM_WORLD);
+      #ifdef USE_GPU
+      #ifdef USE_UMPIRE
       MPI_Bcast(&umpire_device_pool_size, 1, MPI_UNSIGNED, 0, MPI_COMM_WORLD);
+      #endif
+      #endif
 
       vector<uint32_t> division_key(n_divisions);
       vector<uint32_t> region_at_division(n_divisions);
@@ -833,6 +846,12 @@ public:
   int get_rng_seed() const { return seed; }
   //! Return the number of photons set in the input file to run
   uint64_t get_number_photons() const { return n_photons; }
+#ifdef USE_GPU
+#ifdef USE_UMPIRE
+  //! Return the device memory pool size in GB
+  uint32_t get_umpire_device_pool_size() const { return umpire_device_pool_size; }
+#endif
+#endif
   //! Return the batch size (particles to run between parallel processing)
   uint32_t get_batch_size() const { return batch_size; }
   //! Return the user requested number of particles in a message
@@ -841,9 +860,9 @@ public:
   }
   //! Return the domain decomposition algorithm
   uint32_t get_dd_mode() const { return dd_mode; }
-  //! Return the particle storage type 
+  //! Return the particle storage type
   uint32_t get_particle_storage() const { return particle_storage; }
-  //! Return the particle storage type 
+  //! Return the particle storage type
   uint32_t get_particle_algorithm() const { return particle_algorithm; }
 
   //! Return the domain decomposition algorithm
@@ -911,13 +930,19 @@ private:
 
   // Parallel parameters
   uint32_t dd_mode;     //!< Mode of domain decomposed transport algorithm
-  uint32_t particle_storage; //!< Particle array storage type 
+  uint32_t particle_storage; //!< Particle array storage type
   uint32_t particle_algorithm; //!< Event-based or history-based
   uint32_t decomp_mode; //!< Mode of decomposing mesh
   uint32_t n_omp_threads; //!< Number of OpenMP threads, 1 if no OpenMP
 
   // Debug parameters
   uint32_t output_freq; //!< How often to print temperature information
+
+#ifdef USE_GPU
+#ifdef USE_UMPIRE
+  uint32_t umpire_device_pool_size = 4; //!< Size (in GB) of the device memory pool
+#endif
+#endif
 
   // Bools
   bool use_comb;        //!< Comb census photons
