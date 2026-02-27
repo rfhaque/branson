@@ -16,11 +16,12 @@
 #include "cell.h"
 #include "config.h"
 
+template <typename Census_T>
 class GPU_Setup {
 
 public:
   //! Constructor
-  GPU_Setup(const int rank, const int n_ranks, const bool use_gpu_transporter, const std::vector<Cell> &cpu_cells)
+  GPU_Setup(const int rank, const int n_ranks, const bool use_gpu_transporter, const std::vector<Cell> &cpu_cells, uint64_t n_user_photons)
     : m_use_gpu_transporter(use_gpu_transporter), device_cells_ptr(nullptr)
   {
 #ifdef USE_GPU
@@ -37,9 +38,21 @@ public:
       Insist(!err, "CUDA/HIP error in copying cells data");
     }
 #endif
+    if constexpr (std::is_same_v<Census_T, std::vector<Photon>>) {
+      census_photons.reserve(n_user_photons);
+    } else {
+      census_photons.cell_ID.reserve(n_user_photons);
+      census_photons.group.reserve(n_user_photons);
+      census_photons.source_type.reserve(n_user_photons);
+      census_photons.descriptors.reserve(n_user_photons);
+      census_photons.pos.reserve(n_user_photons);
+      census_photons.angle.reserve(n_user_photons);
+      census_photons.E.reserve(n_user_photons);
+      census_photons.E0.reserve(n_user_photons);
+      census_photons.life_dx.reserve(n_user_photons);
+      census_photons.rng.reserve(n_user_photons);
+    }
   }
-
-
 
   //! Destructor
   ~GPU_Setup() {
@@ -51,6 +64,7 @@ public:
 #endif
   }
 
+  Census_T & get_census_photons() {return census_photons;}
   Cell *get_device_cells_ptr() const {return device_cells_ptr;}
   bool use_gpu_transporter() const {return m_use_gpu_transporter;}
 
@@ -88,9 +102,9 @@ void set_device_ID(const int rank, const int n_ranks) {
 #endif
 }
 
-
   bool m_use_gpu_transporter;
   Cell *device_cells_ptr;
+  Census_T census_photons;
 };
 
 #endif // gpu_setup_h_

@@ -60,22 +60,20 @@ void imc_replicated_driver(Mesh &mesh, IMC_State &imc_state,
     MPI_Allreduce(MPI_IN_PLACE, &global_source_energy, 1, MPI_DOUBLE, MPI_SUM,
                   MPI_COMM_WORLD);
 
-    imc_state.set_pre_census_E(get_photon_list_E(census_photons));
 
     // make gpu setup object, may want to source on GPU later so make it before sourcing here
-    GPU_Setup gpu_setup(rank, n_ranks, imc_parameters.get_use_gpu_transporter_flag(), mesh.get_cells());
+    GPU_Setup<Census_T> gpu_setup(rank, n_ranks, imc_parameters.get_use_gpu_transporter_flag(), mesh.get_cells(), n_user_photons);
 
     // setup source
     Timer t_source;
     t_source.start_timer("source");
     wrapped_cali_mark_begin("source");
-    if (imc_state.get_step() == 1)
-      census_photons = make_initial_census_photons<Census_T>(imc_state.get_dt(), mesh, rank, seed, n_user_photons, global_source_energy);
-    imc_state.set_pre_census_E(get_photon_list_E(census_photons));
+
+    make_photons<Census_T>(imc_state.get_dt(), mesh, rank, imc_state.get_step(),  seed, n_user_photons, global_source_energy, gpu_setup);
+    auto &all_photons = gpu_setup.get_census_photons();
+    imc_state.set_pre_census_E(get_photon_list_census_E(all_photons));
+
     // make emission and source photons
-    auto all_photons = make_photons<Census_T>(imc_state.get_dt(), mesh, rank, imc_state.get_step(), seed, n_user_photons, global_source_energy);
-    // add the census photons
-    join_photon_arrays(all_photons,census_photons);
     wrapped_cali_mark_end("source");
     t_source.stop_timer("source");
     if (rank ==0)
@@ -88,8 +86,7 @@ void imc_replicated_driver(Mesh &mesh, IMC_State &imc_state,
     // add barrier here to make sure the transport timer starts at roughly the same time
     MPI_Barrier(MPI_COMM_WORLD);
 
-    census_photons =
-        replicated_transport<Census_T>(mesh, gpu_setup, imc_state, abs_E, track_E, all_photons, imc_parameters);
+    replicated_transport<Census_T>(mesh, gpu_setup, imc_state, abs_E, track_E, all_photons, imc_parameters);
 
     // reduce the abs_E and the track weighted energy (for T_r)
     MPI_Allreduce(MPI_IN_PLACE, &abs_E[0], mesh.get_n_global_cells(),
