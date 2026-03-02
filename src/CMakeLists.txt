@@ -45,7 +45,6 @@ elseif(
   endif()
 endif()
 
-message("GPU_DBS_STRING: ${GPU_DBS_STRING}")
 project (BRANSON
   VERSION 0.8
   DESCRIPTION "Branson can be used to study different algorithms for parallel Monte Carlo transport. Currently it contains particle passing and mesh passing methods for domain decomposition."

@@ -39,7 +39,6 @@ void imc_particle_pass_driver(Mesh &mesh, IMC_State &imc_state,
   using std::vector;
   vector<double> abs_E(mesh.get_n_local_cells(), 0.0);
   vector<double> track_E(mesh.get_n_local_cells(), 0.0);
-  Census_T census_photons;
   auto n_user_photons = imc_parameters.get_n_user_photons();
   Message_Counter mctr;
   const int rank = mpi_info.get_rank();

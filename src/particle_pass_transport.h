@@ -285,6 +285,9 @@ void particle_pass_transport(
     rank_track_E[i] = cell_tallies[i].get_track_E();
   }
 
+  // remove everything but photons marked census
+  remove_inactive_photons(all_photons);
+
   // set diagnostic quantities
   imc_state.set_exit_E(exit_E);
   imc_state.set_post_census_E(census_E);

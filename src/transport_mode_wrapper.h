@@ -19,11 +19,9 @@ batch_transport(const double next_dt, const bool gpu_available, const GPU_Setup<
                 Census_T &all_photons,
                 std::vector<std::vector<Photon>> &phtn_send_buffer,
                 std::vector<Cell_Tally> &cell_tallies, Timer &t_transport) {
-  using std::cout;
-  using std::endl;
   auto transport_algorithm = imc_parameters.get_transport_algorithm();
   auto n_omp_threads = imc_parameters.get_n_omp_threads();
-  uint64_t n_complete = 0.0;
+  uint64_t n_complete = 0;
   double census_E{0.0};
   double exit_E{0.0};
   std::string hardware = "GPU";      // default, change to CPU if used
@@ -86,8 +84,8 @@ batch_transport(const double next_dt, const bool gpu_available, const GPU_Setup<
       // Call correct overloaded history_cpu_transport_photons
       // Note that both SoA and AoS can use batches here
       auto event_batch_size = imc_parameters.get_batch_size();
-      cout << "Starting CPU event-based transport (batch size: " << event_batch_size << ")..."
-           << endl;
+      std::cout << "Starting CPU event-based transport (batch size: " << event_batch_size << ")..."
+           << std::endl;
       for (size_t batch_start = 0; batch_start < all_photons.size();
            batch_start += event_batch_size) {
         size_t batch_end = std::min(batch_start + event_batch_size, all_photons.size());
@@ -113,7 +111,7 @@ batch_transport(const double next_dt, const bool gpu_available, const GPU_Setup<
           exit_E += batch_exit_E;
           census_E += batch_census_E;
         } else {
-          cout << "Unsupported particle container for CPU event transport." << endl;
+          std::cout << "Unsupported particle container for CPU event transport." << std::endl;
           exit(EXIT_FAILURE);
         }
       }
@@ -122,11 +120,11 @@ batch_transport(const double next_dt, const bool gpu_available, const GPU_Setup<
   wrapped_cali_mark_end("batch transport");
   t_transport.stop_timer("batch transport");
   if constexpr (std::is_same_v<Census_T, std::vector<Photon>>) {
-    cout << hardware << ", " << algorithm << ", AoS, transport--particles: " << n_complete
-         << " time: " << t_transport.get_time("batch transport") << endl;
+    std::cout << hardware << ", " << algorithm << ", AoS, transport--particles: " << n_complete
+         << " time: " << t_transport.get_time("batch transport") << std::endl;
   } else {
-    cout << hardware << ", " << algorithm << ", SoA, transport--particles: " << n_complete
-         << " time: " << t_transport.get_time("batch transport") << endl;
+    std::cout << hardware << ", " << algorithm << ", SoA, transport--particles: " << n_complete
+         << " time: " << t_transport.get_time("batch transport") << std::endl;
   }
   return {n_complete, exit_E, census_E};
 }

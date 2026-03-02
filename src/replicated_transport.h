@@ -160,7 +160,6 @@ void replicated_transport(const Mesh& mesh, const GPU_Setup<Census_T>& gpu_setup
   // wait for all ranks to finish
   MPI_Barrier(MPI_COMM_WORLD);
 
-
   // set diagnostic quantities
   imc_state.set_exit_E(exit_E);
   imc_state.set_post_census_E(census_E);
