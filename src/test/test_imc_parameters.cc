@@ -52,9 +52,11 @@ int main(int argc, char *argv[]) {
         simple_imc_parameters_pass = false;
       if (imc_parameters.get_n_user_photons() != 10000)
         simple_imc_parameters_pass = false;
-      // Even though input file says 10k, this defaults to the replicated
-      // value of 100M when you're running 1 MPI rank.
-      if (imc_parameters.get_batch_size() != 100000000)
+      // Input says particle passing but with 1 rank the mode will be set to replaicted and the
+      // dd_batch_size won't be used, check that it's set and read correctly from input
+      if (imc_parameters.get_dd_batch_size() != 1000)
+        simple_imc_parameters_pass = false;
+      if (imc_parameters.get_event_batch_size() != 777)
         simple_imc_parameters_pass = false;
       if (imc_parameters.get_particle_message_size() != 1000)
         simple_imc_parameters_pass = false;

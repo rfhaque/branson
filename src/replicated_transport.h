@@ -75,12 +75,12 @@ void replicated_transport(const Mesh& mesh, const GPU_Setup<Census_T>& gpu_setup
   using std::vector;
 
   // Print total memory footprint information
-  cout << "\n=== Total Particle Memory Usage ===" << endl;
-  print_memory_footprint(all_photons, std::is_same_v<Census_T, std::vector<Photon>> ? "AoS (vector<Photon>)" : "SoA (PhotonArray)");
+  //cout << "\n=== Total Particle Memory Usage ===" << endl;
+  //print_memory_footprint(all_photons, std::is_same_v<Census_T, std::vector<Photon>> ? "AoS (vector<Photon>)" : "SoA (PhotonArray)");
 
   // Print theoretical batch memory calculation once at the start (for CPU event-based)
   if (imc_parameters.get_transport_algorithm() == Constants::EVENT) {
-      auto event_batch_size = imc_parameters.get_batch_size();
+      auto event_batch_size = imc_parameters.get_event_batch_size();
       size_t batch_memory = 0;
       if constexpr (std::is_same_v<Census_T, std::vector<Photon>>) {
         batch_memory = event_batch_size * sizeof(Photon);

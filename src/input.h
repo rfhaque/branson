@@ -263,14 +263,24 @@ public:
             settings_node.child("particle_message_size").text().as_double();
       }
 
-      // number of particles to run between MPI message checks or for batches in event-baesd
-      tempString = settings_node.child_value("batch_size");
+      // number of particles to run between MPI message checks
+      tempString = settings_node.child_value("dd_batch_size");
       if (tempString != "") {
-        batch_size = settings_node.child("batch_size").text().as_uint();
+        dd_batch_size = settings_node.child("dd_batch_size").text().as_uint();
       }
       else {
-        std::cout<<"batch_size not found in settings, defaulting to 10000"<<std::endl;
-        batch_size = 10000;
+        std::cout<<"dd_batch_size not found in settings, defaulting to 10000"<<std::endl;
+        dd_batch_size = 10000;
+      }
+
+      // number of particles in  batch for event-baesd transport
+      tempString = settings_node.child_value("event_batch_size");
+      if (tempString != "") {
+        event_batch_size = settings_node.child("event_batch_size").text().as_uint();
+      }
+      else {
+        std::cout<<"event_batch_size not found in settings, defaulting to 10000"<<std::endl;
+        event_batch_size = 10000;
       }
 
       // debug options
@@ -489,11 +499,6 @@ public:
       for (uint32_t k = 0; k < z.size(); ++k)
         silo_z[k] = z[k];
 
-      // batch size should be very large in replicated mode since there is no need to check buffers
-      // but batch size is used in event-based so let it be user-set in that case
-      if (dd_mode == REPLICATED && particle_algorithm == HISTORY) {
-        batch_size = 100000000;
-      }
     } // end xml parse
 
     // data will be invalid here for non-root ranks but everything will be sized correctly and
@@ -506,9 +511,10 @@ public:
     vector<int> all_bools = {write_silo, use_comb, print_verbose, print_mesh_info,
                             use_gpu_transporter};
     vector<uint32_t> all_uint = {seed, dd_mode, decomp_mode, particle_storage, particle_algorithm,
-                                  n_omp_threads, output_freq, batch_size, particle_message_size,
-                                  n_divisions, n_global_x_cells, n_global_y_cells, n_global_z_cells,
-                                  n_regions, n_x_div, n_y_div, n_z_div};
+                                  n_omp_threads, output_freq, dd_batch_size, event_batch_size,
+                                  particle_message_size, n_divisions, n_global_x_cells,
+                                  n_global_y_cells, n_global_z_cells, n_regions, n_x_div, n_y_div,
+                                  n_z_div};
 
     vector<double> all_doubles = {tStart, dt, tFinish, tMult,  dtMax, T_source};
     vector<int> bcast_bcs = {bc[0], bc[1], bc[2], bc[3], bc[4], bc[5]};
@@ -579,7 +585,8 @@ public:
       particle_algorithm = all_uint[i++];
       n_omp_threads = all_uint[i++];
       output_freq = all_uint[i++];
-      batch_size = all_uint[i++];
+      dd_batch_size = all_uint[i++];
+      event_batch_size = all_uint[i++];
       particle_message_size = all_uint[i++];
       n_divisions = all_uint[i++];
       n_global_x_cells = all_uint[i++];
@@ -723,14 +730,14 @@ public:
     cout << "Transport loop algorithm: "<< ((particle_algorithm == Constants::EVENT) ? "EVENT" : "HISTORY");
     cout << " BASED"<<endl;
     if(particle_algorithm == Constants::EVENT) {
-      cout<<" Batch size for event-based transport loops is "<<batch_size<<std::endl;
+      cout<<" Batch size for event-based transport loops is "<<event_batch_size<<std::endl;
     }
 
     cout << "--Parallel Information--" << endl;
     cout << "DD algorithm: ";
     if (dd_mode == PARTICLE_PASS) {
       cout << "PARTICLE PASSING" << endl;
-      cout << "Batch size: " << batch_size;
+      cout << "DD batch size: " << dd_batch_size;
       cout << ", particle message size: " << particle_message_size;
       cout << endl;
     } else if (dd_mode == REPLICATED) {
@@ -852,8 +859,10 @@ public:
   uint32_t get_umpire_device_pool_size() const { return umpire_device_pool_size; }
 #endif
 #endif
-  //! Return the batch size (particles to run between parallel processing)
-  uint32_t get_batch_size() const { return batch_size; }
+  //! Return the domain decomposed batch size (particles to run between parallel processing)
+  uint32_t get_dd_batch_size() const { return dd_batch_size; }
+  //! Return the event-based batch size (particles to run in event-based kernel)
+  uint32_t get_event_batch_size() const { return event_batch_size; }
   //! Return the user requested number of particles in a message
   uint32_t get_particle_message_size() const {
     return particle_message_size;
@@ -952,7 +961,8 @@ private:
   bool use_gpu_transporter; //!< Run on GPU if availabile
 
   // parallel performance parameters
-  uint32_t batch_size; //!< Particles to run between MPI message checks
+  uint32_t dd_batch_size; //!< Particles to run between MPI message checks
+  uint32_t event_batch_size; //!< Particles to run in an event-based kernel batch
   uint32_t
       particle_message_size; //!< Preferred number of particles in MPI sends
 

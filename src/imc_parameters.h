@@ -30,7 +30,7 @@ public:
   IMC_Parameters(const Input& input)
     : n_user_photons(input.get_number_photons()),
     seed(input.get_rng_seed()),
-    dd_mode(input.get_dd_mode()), batch_size(input.get_batch_size()),
+    dd_mode(input.get_dd_mode()), dd_batch_size(input.get_dd_batch_size()), event_batch_size(input.get_event_batch_size()),
     particle_message_size(input.get_particle_message_size()),
     output_frequency(input.get_output_freq()),
     transport_algorithm(input.get_particle_algorithm()),
@@ -57,7 +57,10 @@ public:
   uint32_t get_dd_mode() const { return dd_mode; }
 
   //! Get the number of particles to run between MPI message processing
-  uint32_t get_batch_size() const { return batch_size; }
+  uint32_t get_dd_batch_size() const { return dd_batch_size; }
+
+  //! Get the number of particles to run in event-based batch (near L3 cache size is optimal)
+  uint32_t get_event_batch_size() const { return event_batch_size; }
 
   //! Get the desired number of particles in messages (particle passing only)
   uint32_t get_particle_message_size() const {
@@ -89,15 +92,16 @@ private:
   uint64_t n_user_photons; //!< User requested number of photons per timestep
   uint32_t seed;       //!< Random number seed
   uint32_t dd_mode;    //!< Mode of domain decomposed transport algorithm
-  uint32_t batch_size; //!< How often to check for MPI passed data
+  uint32_t dd_batch_size; //!< How often to check for MPI passed data
+  uint32_t event_batch_size; //!< Number of particles to run at a time in event-based transport
   uint32_t
     particle_message_size; //!< Preferred number of particles in MPI sends
   uint32_t output_frequency; //!< Frequency to dump output files
-  uint32_t transport_algorithm; //!< How to process transport (e.g., event or history) 
+  uint32_t transport_algorithm; //!< How to process transport (e.g., event or history)
   uint32_t n_omp_threads; //!< Number of OpenMP threads, set by user
   bool write_silo_flag;      //!< Write SILO output files flag
   bool use_gpu_transporter_flag;      //!< Write SILO output files flag
-  bool use_comb_flag;                 //!< Comb the census if great than  n_user_photon after cycle 
+  bool use_comb_flag;                 //!< Comb the census if great than  n_user_photon after cycle
 };
 
 #endif // imc_parameters_h_
