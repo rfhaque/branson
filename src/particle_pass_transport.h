@@ -36,8 +36,8 @@
 
 
 template <typename Census_T>
-Census_T  particle_pass_transport(
-    const Mesh &mesh, const GPU_Setup &gpu_setup, const IMC_Parameters &imc_parameters, const Info &mpi_info, const MPI_Types &mpi_types,
+void particle_pass_transport(
+    const Mesh &mesh, const GPU_Setup<Census_T> &gpu_setup, const IMC_Parameters &imc_parameters, const Info &mpi_info, const MPI_Types &mpi_types,
     IMC_State &imc_state, Message_Counter &mctr, std::vector<double> &rank_abs_E, std::vector<double> &rank_track_E, Census_T &all_photons) {
   using std::cout;
   using std::endl;
@@ -139,7 +139,7 @@ Census_T  particle_pass_transport(
   //------------------------------------------------------------------------//
   // first transport all photons from source (best for GPU)
   //------------------------------------------------------------------------//
-  auto [batch_complete, batch_exit_E, batch_census_E] = batch_transport(next_dt, gpu_available, gpu_setup, imc_parameters, rank_cell_offset, mesh, all_photons, census_list, send_list, cell_tallies, t_transport);
+  auto [batch_complete, batch_exit_E, batch_census_E] = batch_transport(next_dt, gpu_available, gpu_setup, imc_parameters, rank_cell_offset, mesh, all_photons, send_list, cell_tallies, t_transport);
   n_complete += batch_complete;
   exit_E += batch_exit_E;
   census_E += batch_census_E;
@@ -209,10 +209,14 @@ Census_T  particle_pass_transport(
     } // end loop over adjacent processors
 
     if(!phtn_recv_list.empty()) {
-      auto [batch_complete, batch_exit_E, batch_census_E] = batch_transport(next_dt, gpu_available, gpu_setup, imc_parameters, rank_cell_offset, mesh, phtn_recv_list, census_list, send_list, cell_tallies, t_transport);
+      auto [batch_complete, batch_exit_E, batch_census_E] = batch_transport(next_dt, gpu_available, gpu_setup, imc_parameters, rank_cell_offset, mesh, phtn_recv_list, send_list, cell_tallies, t_transport);
       n_complete += batch_complete;
       exit_E += batch_exit_E;
       census_E += batch_census_E;
+
+      // remove everything but photons marked census (off proc handled in batch transport above)
+      remove_inactive_photons(phtn_recv_list);
+      join_photon_arrays(all_photons, phtn_recv_list);
     }
 
     phtn_recv_list.clear();
@@ -287,8 +291,6 @@ Census_T  particle_pass_transport(
   imc_state.set_census_size(census_list.size());
   imc_state.set_network_message_counts(mctr);
   imc_state.set_rank_transport_runtime(t_transport.get_time("timestep_transport"));
-
-  return census_list;
 }
 
 #endif // def particle_pass_transport_h_
