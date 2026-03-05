@@ -16,42 +16,38 @@ echo "=== Allocation resources ==="
 flux resource list
 echo
 
-module load rocm
+function usage() {
+  cat <<EOF
+Usage: ${0} [-n RUN_NAME]
 
-export RUN_NAME=branson-tuolumne-singlenode-gpu-release
-
-function clone() {
-  cd ~
-
-  mkdir -p ~/binaries
-  mkdir -p ~/binaries/$RUN_NAME
-
-  git clone git@github.com:lanl/branson.git
-  cd branson
-  #git checkout FCR
+Options:
+  -n    RUN_NAME Identified of this run
+EOF
 }
 
-function build() {
-  cd /var/tmp/$USER
+while getopts "n:" flag; do
+  case "$flag" in
+    n)
+      RUN_NAME=$OPTARG
+      ;;
+    *)
+      exit 1
+      ;;
+  esac
+done
 
-  mkdir -p $RUN_NAME-build
-  cd $RUN_NAME-build
-
-  export ROCM_PATH=$(dirname "$(dirname "$(which hipcc)")")
-  cmake -DCMAKE_BUILD_TYPE=Release -DUSE_HIP=ON -DUSE_GPU=ON -DCMAKE_INSTALL_PREFIX=$HOME/binaries/$RUN_NAME $HOME/branson/src/
-
-  make -j
-  ctest -j32
-
-  make install
-}
+if [ -z "$RUN_NAME" ]; then
+  echo "Error: Missing mandatory flag"
+  usage
+  exit 1
+fi
 
 function results() {
   echo "$1,$2,$(awk -F': ' 'END{print $2}' $3)" >> results.txt
 }
 
 function run() {
-  export BRANSON_BIN=$HOME/binaries/$RUN_NAME/bin/BRANSON
+  export BRANSON_BIN=$HOME/install/bin/BRANSON
   export BRANSON_INPUT=$HOME/branson/inputs/3D_hohlraum_single_node.xml
 
   cd /p/lustre5/$USER
@@ -72,7 +68,8 @@ function run() {
   done
 }
 
-clone
-build
+module load PrgEnv-gnu
+module load rocm/6.4.3
+
 run
 
