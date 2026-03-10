@@ -273,7 +273,7 @@ public:
         dd_batch_size = 10000;
       }
 
-      // number of particles in  batch for event-baesd transport
+      // number of particles in batch for event-based transport
       tempString = settings_node.child_value("event_batch_size");
       if (tempString != "") {
         event_batch_size = settings_node.child("event_batch_size").text().as_uint();

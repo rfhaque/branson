@@ -52,7 +52,7 @@ int main(int argc, char *argv[]) {
         simple_imc_parameters_pass = false;
       if (imc_parameters.get_n_user_photons() != 10000)
         simple_imc_parameters_pass = false;
-      // Input says particle passing but with 1 rank the mode will be set to replaicted and the
+      // Input says particle passing but with 1 rank the mode will be set to replicated and the
       // dd_batch_size won't be used, check that it's set and read correctly from input
       if (imc_parameters.get_dd_batch_size() != 1000)
         simple_imc_parameters_pass = false;
