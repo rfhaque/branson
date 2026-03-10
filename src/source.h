@@ -25,11 +25,13 @@
 #include "sampling_functions.h"
 
 GPU_KERNEL void make_source_photons( Cell  const * const cells,  const double dt, const uint32_t seed, uint64_t const * const photon_stream_numbers, double const * const photon_E, int const * const photon_type,  int const * const photon_source_face,  uint32_t const * const photon_cell_index, const uint64_t n_photons, Photon * const all_photons) {
-#ifdef USE_GPU
   using Constants::c;
+#ifdef USE_GPU
   int32_t i = threadIdx.x + blockIdx.x * blockDim.x;
   if (i < n_photons) {
-
+#else
+  for (size_t i=0;i<n_photons;++i) {
+#endif
     auto source_type = photon_type[i];
     RNG rng(seed, photon_stream_numbers[i]);
     // census and emission get uniform position and isotropic angle, source gets position on face and
@@ -40,20 +42,23 @@ GPU_KERNEL void make_source_photons( Cell  const * const cells,  const double dt
     double distance_to_census = (source_type ==0) ? c*dt : rng.generate_random_number() * c * dt;
     uint32_t group = std::floor(rng.generate_random_number() * double(BRANSON_N_GROUPS));
 
-    all_photons[i] = Photon(photon_cell_index[i], group, source_type, Constants::event_type::BORN_SOURCE,  pos, angle, photon_E[i], distance_to_census, rng);
+    all_photons[i] = Photon(cell.get_global_index(), group, source_type, Constants::event_type::BORN_SOURCE,  pos, angle, photon_E[i], distance_to_census, rng);
   }
+#ifdef USE_GPU
   __syncthreads();
 #endif
 }
 
 // for SoA data structures, cell ID, E, E0 and source_type are already set, use them to sample
 // position and angle
-GPU_KERNEL void set_source_photons( Cell  const * const cells,  const double dt, const uint32_t seed, uint64_t const * const photon_stream_numbers, int const * const photon_type, int const * const photon_source_face,  uint32_t const * const photon_cell_index, const uint64_t n_photons, RNG *rng, std::array< double,3 > *pos, std::array<double,3> *angle, double *life_dx, uint32_t *group) {
-#ifdef USE_GPU
+GPU_KERNEL void set_source_photons( Cell  const * const cells,  const double dt, const uint32_t seed, uint64_t const * const photon_stream_numbers, int const * const photon_type, int const * const photon_source_face,  const uint64_t n_photons, uint32_t *photon_cell_index, RNG *rng, std::array< double,3 > *pos, std::array<double,3> *angle, double *life_dx, uint32_t *group) {
   using Constants::c;
+#ifdef USE_GPU
   int32_t i = threadIdx.x + blockIdx.x * blockDim.x;
   if (i < n_photons) {
-
+#else
+  for (size_t i=0;i<n_photons;++i) {
+#endif
     auto source_type = photon_type[i];
     rng[i] = RNG(seed, photon_stream_numbers[i]);
     // census and emission get uniform position and isotropic angle, source gets position on face and
@@ -63,7 +68,10 @@ GPU_KERNEL void set_source_photons( Cell  const * const cells,  const double dt,
     angle[i] = (source_type != 2) ? get_uniform_angle(rng[i]) : get_source_angle_on_face(rng[i], photon_source_face[i]);
     life_dx[i] = (source_type ==0) ? c*dt : rng[i].generate_random_number() * c * dt;
     group[i] = std::floor(rng[i].generate_random_number() * double(BRANSON_N_GROUPS));
+    // cell index comes in as local, is then set to global
+    photon_cell_index[i] = cell.get_global_index();
   }
+#ifdef USE_GPU
   __syncthreads();
 #endif
 }
@@ -72,9 +80,6 @@ GPU_KERNEL void set_source_photons( Cell  const * const cells,  const double dt,
 template <typename Census_T>
 void make_photons(const double dt, const Mesh &mesh, const int rank, const uint32_t cycle,
                     const uint32_t seed, const uint64_t n_user_photons, const double total_E, GPU_Setup<Census_T> &gpu_setup) {
-
-  Timer gpu_timer;
-  gpu_timer.start_timer("source setup");
 
   bool make_initial_census_flag{cycle==1};
   auto E_cell_census = mesh.get_census_E();
@@ -165,7 +170,7 @@ void make_photons(const double dt, const Mesh &mesh, const int rank, const uint3
       uint32_t t_num_source =
           int(n_user_photons * E_cell_source[i] / total_E);
       // make at least one photon to represent source energy
-      if (t_num_source == 0) t_num_source = 1;
+      if (t_num_source == 1) t_num_source = 1;
       const double photon_source_E = E_cell_source[i] / t_num_source;
       const int face = cell.get_source_face();
       for (uint32_t p=0; p<t_num_source;++p) {
@@ -179,9 +184,7 @@ void make_photons(const double dt, const Mesh &mesh, const int rank, const uint3
     }
   }
 
-  gpu_timer.stop_timer("source setup");
-  gpu_timer.start_timer("source gpu setup");
-
+  #ifdef USE_GPU
   // Copy input data to device
   uint64_t *device_photon_stream_nums_ptr;
   auto alloc_err = cudaMalloc((void **)&device_photon_stream_nums_ptr, sizeof(uint64_t) * n_photons);
@@ -212,33 +215,41 @@ void make_photons(const double dt, const Mesh &mesh, const int rank, const uint3
   Insist(!alloc_err, "CUDA/HIP error allocating photon cell index");
   copy_err = cudaMemcpy(device_cell_index_ptr, photon_cell_index.data(), sizeof(uint32_t) * n_photons, cudaMemcpyHostToDevice);
   Insist(!copy_err, "CUDA/HIP error copying photon cell index to device");
-
+  #else
+  // use device pointers with host side data to share code below
+  uint64_t *device_photon_stream_nums_ptr = photon_stream_nums.data();
+  double *device_photon_E_ptr  = photon_E.data();
+  int  *device_source_type_ptr = photon_type.data();
+  int  *device_photon_source_face_ptr = photon_source_face.data();
+  uint32_t  *device_cell_index_ptr = photon_cell_index.data();
+  #endif
   // where Aos and SoA diverge--input data above is used for both, but AoS makes its array of
   // photons to be populated by GPU kernel now, SoA can use some of these input structs directly
 
   if constexpr(std::is_same_v<Census_T, std::vector<Photon>>) {
+    #ifdef USE_GPU
     // Allocate photon data
     Photon *device_photon_ptr;
     auto alloc_err = cudaMalloc((void **)&device_photon_ptr, sizeof(Photon) * n_photons);
     Insist(!alloc_err, "CUDA/HIP error allocating photons");
 
-    gpu_timer.stop_timer("source gpu setup");
+    #else
+    std::vector<Photon> &census_photons = gpu_setup.get_census_photons();
+    auto n_census_photons = census_photons.size();
+    census_photons.resize(n_census_photons + n_photons);
+    Photon *device_photon_ptr = census_photons.data() + n_census_photons;
+    #endif
 
-    gpu_timer.start_timer("source kernel");
-
+    #ifdef USE_GPU
     // Kernel settings
     int n_threads = Constants::n_threads_per_block;
     int n_blocks = (n_photons + n_threads - 1) / n_threads;
-    std::cout<<"About to make "<<n_photons<<" with "<<n_blocks<<" and "<<n_threads<<" threads"<<std::endl;
     make_source_photons<<<n_blocks, n_threads>>>(gpu_setup.get_device_cells_ptr(), dt, seed, device_photon_stream_nums_ptr, device_photon_E_ptr, device_source_type_ptr, device_photon_source_face_ptr, device_cell_index_ptr, n_photons, device_photon_ptr);
 
     auto kernel_err = cudaGetLastError();
     Insist(!kernel_err, "CUDA/HIP error in source kernel launch");
     auto sync_err = cudaDeviceSynchronize();
     Insist(!sync_err, "CUDA/HIP error synchronizing after source kernel");
-
-    gpu_timer.stop_timer("source kernel");
-    gpu_timer.start_timer("source copy back and destroy");
 
     std::vector<Photon> &census_photons = gpu_setup.get_census_photons();
     auto n_census_photons = census_photons.size();
@@ -251,8 +262,14 @@ void make_photons(const double dt, const Mesh &mesh, const int rank, const uint3
     // Free device memory specific to AoS
     auto free_err = cudaFree(device_photon_ptr);
     Insist(!free_err, "error freeing device_photon_ptr");
+    #else
+
+    make_source_photons(mesh.get_const_cells_ptr(), dt, seed, device_photon_stream_nums_ptr, device_photon_E_ptr, device_source_type_ptr, device_photon_source_face_ptr, device_cell_index_ptr, n_photons, device_photon_ptr);
+
+    #endif
   }
   else {
+    #ifdef USE_GPU
     // Allocate photon data
     RNG *device_rng_ptr;
     auto alloc_err = cudaMalloc((void **)&device_rng_ptr, sizeof(RNG) * n_photons);
@@ -273,18 +290,24 @@ void make_photons(const double dt, const Mesh &mesh, const int rank, const uint3
     uint32_t *device_group_ptr;
     alloc_err = cudaMalloc((void **)&device_group_ptr,  sizeof(uint32_t) * n_photons);
     Insist(!alloc_err, "CUDA/HIP error allocating group");
+    #else
+    PhotonArray &census_photons = gpu_setup.get_census_photons();
+    auto n_census_photons = census_photons.size();
+    census_photons.resize(n_census_photons + n_photons);
+    RNG *device_rng_ptr = census_photons.rng.data() + n_census_photons;
+    std::array<double,3> *device_pos_ptr = census_photons.pos.data() + n_census_photons;
+    std::array<double,3> *device_angle_ptr = census_photons.angle.data() + n_census_photons;
+    double *device_life_dx_ptr = census_photons.life_dx.data() + n_census_photons;
+    uint32_t *device_group_ptr = census_photons.group.data() + n_census_photons;
+    #endif
 
-    gpu_timer.stop_timer("source gpu setup");
-
-    gpu_timer.start_timer("source kernel");
-
+    #ifdef USE_GPU
     // Kernel settings
     int n_threads = Constants::n_threads_per_block;
     int n_blocks = (n_photons + n_threads - 1) / n_threads;
-    std::cout<<"About to make "<<n_photons<<" with "<<n_blocks<<" and "<<n_threads<<" threads"<<std::endl;
     set_source_photons<<<n_blocks, n_threads>>>(gpu_setup.get_device_cells_ptr(), dt, seed,
       device_photon_stream_nums_ptr, device_source_type_ptr, device_photon_source_face_ptr,
-      device_cell_index_ptr, n_photons, device_rng_ptr, device_pos_ptr, device_angle_ptr,
+      n_photons, device_cell_index_ptr, device_rng_ptr, device_pos_ptr, device_angle_ptr,
       device_life_dx_ptr, device_group_ptr);
 
     auto kernel_err = cudaGetLastError();
@@ -292,21 +315,19 @@ void make_photons(const double dt, const Mesh &mesh, const int rank, const uint3
     auto sync_err = cudaDeviceSynchronize();
     Insist(!sync_err, "CUDA/HIP error synchronizing after source kernel");
 
-    gpu_timer.stop_timer("source kernel");
-    gpu_timer.start_timer("source copy back and destroy");
-
     PhotonArray &census_photons = gpu_setup.get_census_photons();
     auto n_census_photons = census_photons.size();
     census_photons.resize(n_census_photons + n_photons);
 
     // Copy photon arrays back to host photon array object
     // CPU -> CPU copies
-    std::copy( photon_cell_index.begin() , photon_cell_index.end(), census_photons.cell_ID.begin() + n_census_photons);
     std::copy( photon_E.begin(), photon_E.end(),  census_photons.E.begin() + n_census_photons);
     std::copy(photon_E.begin(), photon_E.end(), census_photons.E0.begin() + n_census_photons);
     std::copy( photon_type.begin(), photon_type.end(), census_photons.source_type.begin() + n_census_photons);
     std::fill(census_photons.descriptors.begin() + n_census_photons, census_photons.descriptors.end(), Constants::event_type::BORN_SOURCE);
     // GPU -> CPU copies
+    copy_err = cudaMemcpy(census_photons.cell_ID.data() + n_census_photons, device_cell_index_ptr, n_photons * sizeof(uint32_t), cudaMemcpyDeviceToHost);
+    Insist(!copy_err, "CUDA/HIP error copying cell indices back to host");
     copy_err = cudaMemcpy(census_photons.group.data() + n_census_photons, device_group_ptr, n_photons * sizeof(uint32_t), cudaMemcpyDeviceToHost);
     Insist(!copy_err, "CUDA/HIP error copying group back to host");
     copy_err = cudaMemcpy(census_photons.pos.data() + n_census_photons, device_pos_ptr, n_photons * sizeof(std::array<double,3>), cudaMemcpyDeviceToHost);
@@ -329,8 +350,21 @@ void make_photons(const double dt, const Mesh &mesh, const int rank, const uint3
     Insist(!free_err, "error freeing device_lift_dx_ptr");
     free_err = cudaFree(device_rng_ptr );
     Insist(!free_err, "error freeing device_rng_ptr");
+  #else
+    set_source_photons(mesh.get_const_cells_ptr(), dt, seed,
+      device_photon_stream_nums_ptr, device_source_type_ptr, device_photon_source_face_ptr,
+      n_photons, device_cell_index_ptr, device_rng_ptr, device_pos_ptr, device_angle_ptr,
+      device_life_dx_ptr, device_group_ptr);
+
+    std::copy( photon_cell_index.begin() , photon_cell_index.end(), census_photons.cell_ID.begin() + n_census_photons);
+    std::copy( photon_E.begin(), photon_E.end(),  census_photons.E.begin() + n_census_photons);
+    std::copy(photon_E.begin(), photon_E.end(), census_photons.E0.begin() + n_census_photons);
+    std::copy( photon_type.begin(), photon_type.end(), census_photons.source_type.begin() + n_census_photons);
+    std::fill(census_photons.descriptors.begin() + n_census_photons, census_photons.descriptors.end(), Constants::event_type::BORN_SOURCE);
+  #endif
   }
 
+  #ifdef USE_GPU
   // Free device memory
   auto free_err = cudaFree(device_photon_stream_nums_ptr);
   Insist(!free_err, "error freeing device_photon_seed_ptr");
@@ -342,9 +376,7 @@ void make_photons(const double dt, const Mesh &mesh, const int rank, const uint3
   Insist(!free_err, "error freeing device_source_face_ptr");
   free_err = cudaFree(device_cell_index_ptr);
   Insist(!free_err, "error freeing device_cell_index_ptr");
-
-  gpu_timer.stop_timer("source copy back and destroy");
-  gpu_timer.print_timers();
+  #endif
 }
 
 

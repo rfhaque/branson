@@ -31,7 +31,7 @@ std::tuple<uint64_t, double, double> post_process_photons(const double next_dt, 
 
 template <>
 std::tuple<uint64_t, double, double> post_process_photons<std::vector<Photon>>(const double next_dt, std::vector<Photon> &all_photons, const Mesh &mesh, std::vector<std::vector<Photon>> &send_list) {
-  uint64_t n_complete = 0.0;
+  uint64_t n_complete = 0;
   double census_E{0.0};
   double exit_E{0.0};
   const auto adjacent_procs = mesh.get_proc_adjacency_list();

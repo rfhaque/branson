@@ -17,8 +17,6 @@
 #include <iostream>
 #include <mpi.h>
 #include <numeric>
-#include <stack>
-#include <unordered_map>
 #include <vector>
 
 #include "config.h"
@@ -39,10 +37,6 @@ template <typename Census_T>
 void particle_pass_transport(
     const Mesh &mesh, const GPU_Setup<Census_T> &gpu_setup, const IMC_Parameters &imc_parameters, const Info &mpi_info, const MPI_Types &mpi_types,
     IMC_State &imc_state, Message_Counter &mctr, std::vector<double> &rank_abs_E, std::vector<double> &rank_track_E, Census_T &all_photons) {
-  using std::cout;
-  using std::endl;
-  using std::stack;
-  using std::unordered_map;
   using std::vector;
 
   // is the GPU even available?
@@ -55,6 +49,7 @@ void particle_pass_transport(
   int rank = mpi_info.get_rank();
 
   // print warning message if GPU transport is requested but not available
+  bool use_gpu = gpu_setup.use_gpu_transporter() && gpu_available;
   if(rank==0 && gpu_setup.use_gpu_transporter() && !gpu_available) {
     std::cout<<"WARNING: use_gpu_transporter set to true but GPU kernel not available,";
     std::cout<<" running transport on CPU"<<std::endl;
@@ -70,7 +65,7 @@ void particle_pass_transport(
   wrapped_cali_mark_begin("timestep_transport");
 
   // Number of particles to run between MPI communication
-  const uint32_t dd_batch_size = imc_parameters.get_batch_size();
+  const uint32_t dd_batch_size = imc_parameters.get_dd_batch_size();
 
   // Preferred size of MPI message
   const uint32_t max_buffer_size = imc_parameters.get_particle_message_size();
@@ -128,7 +123,6 @@ void particle_pass_transport(
   // main transport loop
   //------------------------------------------------------------------------//
 
-  Census_T census_list;    //!< End of timestep census list
   Census_T phtn_recv_list; //!< Photons from received messages
 
   uint64_t n_complete = 0; //!< Completed histories, regardless of origin
@@ -137,17 +131,63 @@ void particle_pass_transport(
   const uint32_t rank_cell_offset{mesh.get_rank_cell_offset(rank)};
 
   //------------------------------------------------------------------------//
-  // first transport all photons from source (best for GPU)
+  // on GPU, transport all photons from source
   //------------------------------------------------------------------------//
-  auto [batch_complete, batch_exit_E, batch_census_E] = batch_transport(next_dt, gpu_available, gpu_setup, imc_parameters, rank_cell_offset, mesh, all_photons, send_list, cell_tallies, t_transport);
-  n_complete += batch_complete;
-  exit_E += batch_exit_E;
-  census_E += batch_census_E;
+  bool local_work_done = false;
+  if(use_gpu) {
+    auto [batch_complete, batch_exit_E, batch_census_E] = batch_transport(next_dt, gpu_available, gpu_setup, imc_parameters, rank_cell_offset, mesh, all_photons, send_list, cell_tallies, t_transport);
+    n_complete += batch_complete;
+    exit_E += batch_exit_E;
+    census_E += batch_census_E;
+    bool local_work_done = true;
+    // condense census right now?
+
+  }
+
+  // particles that reach census from comm need a place to live
+  Census_T commed_census_particles;
 
   //------------------------------------------------------------------------//
   // process photon send and receives
   //------------------------------------------------------------------------//
+  size_t batch_end =0;
+
   while (last_global_complete_count != n_global) {
+
+    // on the CPU, allow interleaving of computation and communication with dd_batch_size and
+    // the particle message size
+    if(!use_gpu) {
+      size_t batch_start = batch_end;
+      batch_end = std::min(batch_start + dd_batch_size, all_photons.size());
+      if (batch_start != batch_end) {
+        if (batch_end == all_photons.size()) {
+          local_work_done = true;
+        }
+        if constexpr (std::is_same_v<Census_T, std::vector<Photon>>) {
+          // Create a sub-vector for the batch (requires copy)
+          std::vector<Photon> batch_photons(all_photons.begin() + batch_start,
+                                            all_photons.begin() + batch_end);
+          auto [batch_complete, batch_exit_E, batch_census_E] = batch_transport(next_dt, gpu_available, gpu_setup, imc_parameters, rank_cell_offset, mesh, batch_photons, send_list, cell_tallies, t_transport);
+          // copy batch back into all_photons
+          std::copy(batch_photons.begin(), batch_photons.end(), all_photons.begin() + batch_start);
+          n_complete += batch_complete;
+          exit_E += batch_exit_E;
+          census_E += batch_census_E;
+        } else if constexpr (std::is_same_v<Census_T, PhotonArray>) {
+          // Get a sub-batch (creates a copy)
+          auto batch_photons = all_photons.get_sub_batch(batch_start, batch_end);
+          auto [batch_complete, batch_exit_E, batch_census_E] = batch_transport(next_dt, gpu_available, gpu_setup, imc_parameters, rank_cell_offset, mesh, batch_photons, send_list, cell_tallies, t_transport);
+          all_photons.update_from_sub_batch(batch_photons, batch_start);
+          n_complete += batch_complete;
+          exit_E += batch_exit_E;
+          census_E += batch_census_E;
+        } else {
+          std::cout << "Unsupported particle container for CPU DD transport." << std::endl;
+          exit(EXIT_FAILURE);
+        }
+      }
+    }
+
     int recv_req_flag;
     int recv_count; // recieve count is 32 bit
 
@@ -169,7 +209,8 @@ void particle_pass_transport(
       }
 
       // send full photon buffers if send_list has some photons in it
-      if (phtn_send_buffer[i_b].empty() && !send_list[i_b].empty()) {
+      //if (phtn_send_buffer[i_b].empty() && !send_list[i_b].empty()) {
+      if (phtn_send_buffer[i_b].empty() && (send_list[i_b].size() == max_buffer_size || (!send_list[i_b].empty() && local_work_done == true))) {
         const uint32_t n_photons_to_send = (send_list[i_b].size() <= max_buffer_size) ?
             send_list[i_b].size() : max_buffer_size;
         vector<Photon>::iterator copy_start = send_list[i_b].begin();
@@ -216,7 +257,7 @@ void particle_pass_transport(
 
       // remove everything but photons marked census (off proc handled in batch transport above)
       remove_inactive_photons(phtn_recv_list);
-      join_photon_arrays(all_photons, phtn_recv_list);
+      join_photon_arrays(commed_census_particles, phtn_recv_list);
     }
 
     phtn_recv_list.clear();
@@ -285,10 +326,15 @@ void particle_pass_transport(
     rank_track_E[i] = cell_tallies[i].get_track_E();
   }
 
+  // remove everything but photons marked census from the initial source (no commed particles)
+  remove_inactive_photons(all_photons);
+  // add in the commed photons that reached census
+  join_photon_arrays(all_photons, commed_census_particles);
+
   // set diagnostic quantities
   imc_state.set_exit_E(exit_E);
   imc_state.set_post_census_E(census_E);
-  imc_state.set_census_size(census_list.size());
+  imc_state.set_census_size(all_photons.size());
   imc_state.set_network_message_counts(mctr);
   imc_state.set_rank_transport_runtime(t_transport.get_time("timestep_transport"));
 }

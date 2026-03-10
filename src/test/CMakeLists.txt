@@ -132,7 +132,9 @@ endforeach()
 #------------------------------------------------------------------------------#
 # Other tests
 
+if(${USE_GPU})
 add_branson_gpu_test( SOURCE test_warp_reductions.cc      PE_LIST "1" )
+endif()
 add_branson_test( SOURCE test_imc_state.cc      PE_LIST "2" )
 add_branson_test( SOURCE test_photon.cc      PE_LIST "2" )
 
