@@ -67,14 +67,12 @@ void imc_replicated_driver(Mesh &mesh, IMC_State &imc_state,
     // setup source
     Timer t_source;
     t_source.start_timer("source");
-    wrapped_cali_mark_begin("source");
 
     make_photons<Census_T>(imc_state.get_dt(), mesh, rank, imc_state.get_step(),  seed, n_user_photons, global_source_energy, gpu_setup);
     auto &all_photons = gpu_setup.get_census_photons();
     imc_state.set_pre_census_E(get_photon_list_census_E(all_photons));
 
     // make emission and source photons
-    wrapped_cali_mark_end("source");
     t_source.stop_timer("source");
     if (rank ==0)
       std::cout<<"source time: "<<t_source.get_time("source")<<std::endl;
