@@ -1107,7 +1107,8 @@ void gpu_event_transport_photons(const uint32_t rank_cell_offset,
     std::vector<Cell_Tally> &cpu_cell_tallies,
     const std::vector<EmissionGroupData>& emission_groups) // Pass host emission data
 {
-  wrapped_cali_mark_begin("soa_gpu_event_transport_photons");
+  Timer t_transport;
+  t_transport.start_timer("soa_gpu_event_transport_photons");
   uint32_t n_photons = static_cast<uint32_t>(cpu_photons.size());
    if (n_photons == 0) return;
 
@@ -1211,7 +1212,7 @@ void gpu_event_transport_photons(const uint32_t rank_cell_offset,
 
   int n_threads = Constants::n_threads_per_block;
 
-  wrapped_cali_mark_begin("soa kernel");
+  t_transport.start_timer("soa kernel");
   while (current_active_count > 0) {
     int n_blocks = (current_active_count + n_threads - 1) / n_threads;
 
@@ -1291,7 +1292,7 @@ void gpu_event_transport_photons(const uint32_t rank_cell_offset,
 
   std::cout<<"finished while"<<std::endl;
   auto sync_err = cudaDeviceSynchronize();
-  wrapped_cali_mark_end("soa kernel");
+  t_transport.stop_timer("soa kernel");
   Insist(!sync_err, "error in synchronize");
   std::cout<<"finished while post sync"<<std::endl;
 
@@ -1366,7 +1367,7 @@ void gpu_event_transport_photons(const uint32_t rank_cell_offset,
   free_err = cudaFree(d_local_cell_indices);
   if (free_err) std::cout<<"Error freeing d_local_cell_indices"<<std::endl;
   std::cout<<"about to exit event transport loop"<<std::endl;
-  wrapped_cali_mark_end("soa_gpu_event_transport_photons");
+  t_transport.stop_timer("soa_gpu_event_transport_photons");
 }
 
 
@@ -1616,7 +1617,8 @@ void gpu_event_transport_photons(const uint32_t rank_cell_offset,
     std::vector<Cell_Tally> &cpu_cell_tallies,
     const std::vector<EmissionGroupData>& emission_groups)
 {
-  wrapped_cali_mark_begin("aos_gpu_event_transport_photons");
+  Timer t_transport;
+  t_transport.start_timer("aos_gpu_event_transport_photons");
   uint32_t n_photons = static_cast<uint32_t>(cpu_photons.size());
   if (n_photons == 0) return;
 
@@ -1687,7 +1689,7 @@ void gpu_event_transport_photons(const uint32_t rank_cell_offset,
 
   int n_threads = Constants::n_threads_per_block;
 
-  wrapped_cali_mark_begin("aos kernel");
+  t_transport.start_timer("aos kernel");
   while (current_active_count > 0) {
     int n_blocks = (current_active_count + n_threads - 1) / n_threads;
 
@@ -1773,7 +1775,7 @@ void gpu_event_transport_photons(const uint32_t rank_cell_offset,
   } // End while(current_active_count > 0)
 
   auto sync_error = cudaDeviceSynchronize(); // Ensure all kernels are finished before copy back
-  wrapped_cali_mark_end("aos kernel");
+  t_transport.stop_timer("aos kernel");
   Insist(!sync_error, "Error in synchronize");
 
   // --- Copy Results Back ---
@@ -1811,7 +1813,7 @@ void gpu_event_transport_photons(const uint32_t rank_cell_offset,
   if (free_err) std::cout<<"Error freeing d_killed_indices"<<std::endl;
   free_err = cudaFree(d_next_active_count_atomic);
   if (free_err) std::cout<<"Error freeing d_next_active_count_atomic"<<std::endl;
-  wrapped_cali_mark_end("aos_gpu_event_transport_photons");
+  t_transport.stop_timer("aos_gpu_event_transport_photons");
 }
 
 #endif // USE_GPU

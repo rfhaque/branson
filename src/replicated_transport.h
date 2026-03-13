@@ -131,7 +131,6 @@ void replicated_transport(const Mesh& mesh, const GPU_Setup<Census_T>& gpu_setup
   // timing
   Timer t_transport;
   t_transport.start_timer("timestep transport");
-  wrapped_cali_mark_begin("timestep transport");
 
   //------------------------------------------------------------------------//
   // main transport loop
@@ -154,7 +153,6 @@ void replicated_transport(const Mesh& mesh, const GPU_Setup<Census_T>& gpu_setup
   }
 
   // record time of transport work for this rank
-  wrapped_cali_mark_end("timestep transport");
   t_transport.stop_timer("timestep transport");
 
   // wait for all ranks to finish

@@ -27,7 +27,6 @@ batch_transport(const double next_dt, const bool gpu_available, const GPU_Setup<
   std::string hardware = "GPU";      // default, change to CPU if used
   std::string algorithm = "history"; // default, change to event if used
   t_transport.start_timer("batch transport");
-  //wrapped_cali_mark_begin("batch transport");
   if (transport_algorithm == Constants::HISTORY) {
     // HISTORY: GPU
     if (gpu_setup.use_gpu_transporter() && gpu_available) {
@@ -122,7 +121,6 @@ batch_transport(const double next_dt, const bool gpu_available, const GPU_Setup<
       }
     } // EVENT: CPU
   }   // EVENT
-  //wrapped_cali_mark_end("batch transport");
   t_transport.stop_timer("batch transport");
   /*
   if constexpr (std::is_same_v<Census_T, std::vector<Photon>>) {
