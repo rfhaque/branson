@@ -139,7 +139,7 @@ void particle_pass_transport(
     n_complete += batch_complete;
     exit_E += batch_exit_E;
     census_E += batch_census_E;
-    bool local_work_done = true;
+    local_work_done = true;
     // condense census right now?
 
   }
