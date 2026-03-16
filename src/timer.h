@@ -17,10 +17,6 @@
 #include <string>
 #include <unordered_map>
 
-#ifdef caliper_FOUND
-#include <caliper/cali.h>
-#endif
-
 class Timer {
 public:
   Timer(void) {}
@@ -29,7 +25,7 @@ public:
   //! Start or continute timer with name
   void start_timer(std::string name) {
 #ifdef caliper_FOUND
-    CALI_MARK_BEGIN(name);
+    CALI_MARK_BEGIN(name.c_str());
 #else
     // start timer if new
     if (times.find(name) == times.end())
@@ -41,7 +37,7 @@ public:
   //! Stop timer with name (must be the last active timer)
   void stop_timer(std::string name) {
 #ifdef caliper_FOUND
-    CALI_MARK_END(name);
+    CALI_MARK_END(name.c_str());
 #else
     double time_seconds =
         std::chrono::duration_cast<std::chrono::microseconds>(
