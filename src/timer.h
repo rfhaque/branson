@@ -17,6 +17,8 @@
 #include <string>
 #include <unordered_map>
 
+#include "config.h"
+
 class Timer {
 public:
   Timer(void) {}
