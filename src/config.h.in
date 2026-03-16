@@ -18,7 +18,7 @@
 
 #cmakedefine VIZ_LIBRARIES_FOUND
 #cmakedefine METIS_FOUND
-#cmakedefine caliper_FOUND
+#cmakedefine USE_CALIPER
 #cmakedefine MOONLIGHT_NODE
 #cmakedefine SNOW_NODE
 #cmakedefine TRINITITE_NODE
@@ -41,7 +41,7 @@
 #include <omp.h>
 #endif
 
-#ifdef caliper_FOUND
+#ifdef USE_CALIPER
 #include <caliper/cali.h>
 #endif
 
@@ -324,7 +324,7 @@ inline void device_debug_print(size_t n_photons, const std::string &alg_type) {}
 
 #endif // USE_GPU
 
-#ifdef caliper_FOUND
+#ifdef USE_CALIPER
 
 /*
 void wrapped_cali_mark_begin(const char *timer_name) {
