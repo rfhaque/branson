@@ -78,6 +78,13 @@ int main(int argc, char **argv) {
     if (mpi_info.get_rank() == 0)
       input.print_problem_info();
 
+#ifdef caliper_FOUND
+    MPI_Comm adiak_mpi_comm = MPI_COMM_WORLD;
+    void* adiak_mpi_comm_ptr = &adiak_mpi_comm;
+    adiak::init(adiak_mpi_comm_ptr);
+    adiak::collect_all();
+#endif
+
 #ifdef USE_GPU
 #ifdef USE_UMPIRE
     makeUmpireDevicePool(input.get_umpire_device_pool_size());
@@ -149,6 +156,10 @@ int main(int argc, char **argv) {
 
     timers.stop_timer("Total");
 
+#ifdef caliper_FOUND
+    adiak::fini();
+#endif
+
     if (mpi_info.get_rank() == 0) {
       cout << "****************************************";
       cout << "****************************************" << endl;
@@ -161,7 +172,19 @@ int main(int argc, char **argv) {
 #ifdef USE_UMPIRE
       cout<<"Umpire device memory pool size: "<<input.get_umpire_device_pool_size()<<" GB"<<endl;
       cout<<"Umpire device memory high water mark: "<<getDeviceMemoryHighWatermark()<<" GB"<<endl;
+#ifdef caliper_FOUND
+      adiak::value("umpire_device_pool_size", input.get_umpire_device_pool_size());
+      adiak::value("umpire_device_high_water_mark", getDeviceMemoryHighWatermark());
 #endif
+#endif
+#endif
+
+#ifdef caliper_FOUND
+    adiak::value("num_particles", imc_p.get_n_user_photons());
+    adiak::value("fom", imc_state.get_photons_per_second_fom(imc_p.get_n_user_photons()));
+    adiak::value("particle_storage", (input.get_particle_storage() == Constants::AOS) ? "AOS" : "SOA");
+    adiak::value("decomposition_mode", (input.get_dd_mode() == Constants::REPLICATED) ? "PARTICLE_PASS" : "REPLICATED");
+    adiak::value("particle_algorithm", (input.get_particle_algorithm() == Constants::EVENT) ? "EVENT" : "HISTORY");
 #endif
     }
 

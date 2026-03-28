@@ -43,6 +43,7 @@
 
 #ifdef caliper_FOUND
 #include <caliper/cali.h>
+#include <adiak.hpp>
 #endif
 
 // since the main.cc as marked as a CUDA file in CUDA mode, this allows the tests to compile
