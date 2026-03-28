@@ -182,6 +182,7 @@ int main(int argc, char **argv) {
 #ifdef caliper_FOUND
     adiak::value("num_particles", imc_p.get_n_user_photons());
     adiak::value("fom", imc_state.get_photons_per_second_fom(imc_p.get_n_user_photons()));
+    adiak::value("n_groups", BRANSON_N_GROUPS);
     adiak::value("particle_storage", (input.get_particle_storage() == Constants::AOS) ? "AOS" : "SOA");
     adiak::value("decomposition_mode", (input.get_dd_mode() == Constants::REPLICATED) ? "PARTICLE_PASS" : "REPLICATED");
     adiak::value("particle_algorithm", (input.get_particle_algorithm() == Constants::EVENT) ? "EVENT" : "HISTORY");
