@@ -52,7 +52,7 @@
 // C++ main)
 #ifdef __NVCC__
 #define USE_CUDA ON
-#define USE_GPU
+#define USE_GPU ON
 static constexpr uint32_t WARP_SIZE=32;
 #endif
 
