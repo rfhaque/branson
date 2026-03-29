@@ -609,12 +609,10 @@ void decompose_mesh(Proto_Mesh &mesh, const MPI_Types &mpi_types,
 
   // decomposition methods return a partition vector which is the rank of each cell
   std::vector<int> part;
-  std::cout << "On rank: " << rank << ":: decomposition type " << decomposition_type << std::endl;
   if (decomposition_type == CUBE) {
     part = cube_partition(mesh, rank, n_rank);
     edgecut = 1;
   } else if (decomposition_type == METIS) {
-    std::cout << "On rank: " << rank << ":: METIS decomposition" << std::endl;
     if (n_rank > 1) {
 #ifdef METIS_FOUND
       part = metis_partition(mesh, edgecut, rank, n_rank, mpi_types);
