@@ -142,7 +142,7 @@ int main(int argc, char **argv) {
       else if( input.get_particle_storage() == SOA) {
         timers.start_timer("replicated soa");
         imc_replicated_driver<PhotonArray>(mesh, imc_state, imc_p, mpi_types, mpi_info);
-        timers.start_timer("replicated soa");
+        timers.stop_timer("replicated soa");
       }
       else {
         cout << "Driver for array currently not supported" << endl;
