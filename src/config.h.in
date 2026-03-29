@@ -81,6 +81,8 @@ static constexpr uint32_t WARP_SIZE=64;
 #ifdef USE_UMPIRE
 cudaError_t umpireMalloc(void** devPtr, size_t size);
 cudaError_t umpireFree(void* devPtr);
+template <typename T>
+cudaError_t umpireMalloc(T** devPtr, size_t size);
 #define cudaMalloc umpireMalloc
 #define cudaFree umpireFree
 #else
@@ -108,6 +110,8 @@ cudaError_t umpireFree(void* devPtr);
 #ifdef USE_UMPIRE
 cudaError_t umpireMalloc(void** devPtr, size_t size);
 cudaError_t umpireFree(void* devPtr);
+template <typename T>
+cudaError_t umpireMalloc(T** devPtr, size_t size);
 #define cudaFree umpireFree
 #define cudaMalloc umpireMalloc
 #endif
@@ -153,6 +157,14 @@ cudaError_t umpireMalloc(void** devPtr, size_t size) {
   auto allocator = rm.getAllocator("BRANSON_DEVICE_POOL");
   *devPtr = allocator.allocate(size);
   return cudaSuccess;
+}
+
+template <typename T>
+cudaError_t umpireMalloc(T** devPtr, size_t size) {
+  void* raw_ptr = nullptr;
+  auto err = umpireMalloc(&raw_ptr, size);
+  *devPtr = static_cast<T*>(raw_ptr);
+  return err;
 }
 
 cudaError_t umpireFree(void* devPtr) {
