@@ -14,6 +14,7 @@
 #define config_h_
 
 #include <mpi.h>
+#include <cstddef>
 #include <cstdint>
 
 #cmakedefine VIZ_LIBRARIES_FOUND
@@ -78,6 +79,10 @@ static constexpr uint32_t WARP_SIZE=64;
 #define cudaDeviceSynchronize hipDeviceSynchronize
 #define cudaError_t hipError_t
 #ifdef USE_UMPIRE
+cudaError_t umpireMalloc(void** devPtr, size_t size);
+cudaError_t umpireFree(void* devPtr);
+template <typename T>
+cudaError_t umpireMalloc(T** devPtr, size_t size);
 #define cudaMalloc umpireMalloc
 #define cudaFree umpireFree
 #else
@@ -100,13 +105,16 @@ static constexpr uint32_t WARP_SIZE=64;
 #endif // USE_HIP
 
 #ifdef USE_CUDA
+#include <cuda.h>
+#include <cuda_runtime.h>
 #ifdef USE_UMPIRE
+cudaError_t umpireMalloc(void** devPtr, size_t size);
+cudaError_t umpireFree(void* devPtr);
+template <typename T>
+cudaError_t umpireMalloc(T** devPtr, size_t size);
 #define cudaFree umpireFree
 #define cudaMalloc umpireMalloc
 #endif
-
-#include <cuda.h>
-#include <cuda_runtime.h>
 #include <device_launch_parameters.h>
 #include <thrust/device_vector.h>
 #include <thrust/execution_policy.h>
@@ -149,6 +157,14 @@ cudaError_t umpireMalloc(void** devPtr, size_t size) {
   auto allocator = rm.getAllocator("BRANSON_DEVICE_POOL");
   *devPtr = allocator.allocate(size);
   return cudaSuccess;
+}
+
+template <typename T>
+cudaError_t umpireMalloc(T** devPtr, size_t size) {
+  void* raw_ptr = nullptr;
+  auto err = umpireMalloc(&raw_ptr, size);
+  *devPtr = static_cast<T*>(raw_ptr);
+  return err;
 }
 
 cudaError_t umpireFree(void* devPtr) {
