@@ -35,8 +35,14 @@ public:
   //! Constructor
   Photon() {}
 
+  //! Constructor
+  GPU_HOST_DEVICE Photon(const uint32_t cell_ID, uint32_t group, uint32_t source_type, Constants::event_type descriptor, std::array<double,3> pos,  std::array<double,3> angle, double E0, double life_dx, RNG rng) :
+    m_cell_ID(cell_ID), m_group(group), m_source_type(source_type), descriptors{descriptor, 0, 0,0}, m_pos(pos), m_angle(angle), m_E(E0), m_E0(E0), m_life_dx(life_dx), m_rng(rng)
+
+  {}
+
   //! Destructor
-  ~Photon() {}
+  //~Photon() {}
 
   //--------------------------------------------------------------------------//
   // const functions                                                          //
@@ -63,7 +69,7 @@ public:
 
   //! Return photon group
   GPU_HOST_DEVICE
-  inline uint32_t get_group(void) const { return group; }
+  inline uint32_t get_group(void) const { return m_group; }
 
   //! Return a constant pointer to the start of the particle position array
   GPU_HOST_DEVICE
@@ -119,8 +125,8 @@ public:
     m_life_dx -= distance;
   }
 
-  inline uint32_t get_source_type() const {return source_type;}
-  inline void set_source_type(uint32_t source_type_in) {source_type = source_type_in;}
+  inline uint32_t get_source_type() const {return m_source_type;}
+  inline void set_source_type(uint32_t source_type_in) {m_source_type = source_type_in;}
 
   //! Set the global cell ID
   GPU_HOST_DEVICE
@@ -128,7 +134,7 @@ public:
 
   //! Set the group of the photon
   GPU_HOST_DEVICE
-  inline void set_group(const uint32_t new_group) { group = new_group; }
+  inline void set_group(const uint32_t new_group) { m_group = new_group; }
 
   //! Set the initial energy-weight
   inline void set_E0(const double E) {
@@ -176,8 +182,8 @@ public:
   //--------------------------------------------------------------------------//
 private:
   uint32_t m_cell_ID; //!< Cell ID
-  uint32_t group;     //!< Group of photon
-  uint32_t source_type; //!< CENSUS, EMISSION, or SOURCE
+  uint32_t m_group;     //!< Group of photon
+  uint32_t m_source_type; //!< CENSUS, EMISSION, or SOURCE
   std::array<unsigned char, 4> descriptors; //!< Only using one, but it fills out the padding
   std::array<double,3> m_pos;    //!< photon position
   std::array<double,3> m_angle;  //!< photon angle array

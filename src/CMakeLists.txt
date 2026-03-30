@@ -45,7 +45,6 @@ elseif(
   endif()
 endif()
 
-message("GPU_DBS_STRING: ${GPU_DBS_STRING}")
 project (BRANSON
   VERSION 0.8
   DESCRIPTION "Branson can be used to study different algorithms for parallel Monte Carlo transport. Currently it contains particle passing and mesh passing methods for domain decomposition."
@@ -263,7 +262,7 @@ if("${GPU_DBS_STRING}" STREQUAL "CUDA" )
     string(APPEND CMAKE_CUDA_FLAGS "-expt-extended-lambda"  )
     set_source_files_properties("main.cc" PROPERTIES LANGUAGE CUDA)
     target_compile_definitions(BRANSON PRIVATE USE_GPU)
-    message("Making GPU(CUDA) BRANSON")
+    message("Making GPU(CUDA) BRANSON with ${CUDA_ARCH} architecture ")
   else()
     message("Setting CUDA compiler options")
     #set_target_properties(BRANSON PROPERTIES CUDA_ARCHITECTURES "90") # H100

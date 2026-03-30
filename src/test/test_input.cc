@@ -84,9 +84,11 @@ int main(int argc, char *argv[]) {
         simple_input_pass = false;
       if (input.get_number_photons() != 10000)
         simple_input_pass = false;
-      // Even though input says 10k, this defaults to the replicated
-      // value of 100M when you're running 1 MPI rank.
-      if (input.get_batch_size() != 100000000)
+      // Defaults to 10k if not set
+      if (input.get_dd_batch_size() != 10000)
+        simple_input_pass = false;
+      // Also defaults to 10k if not set
+      if (input.get_event_batch_size() != 10000)
         simple_input_pass = false;
       if (input.get_particle_message_size() != 1000)
         simple_input_pass = false;
@@ -217,9 +219,9 @@ int main(int argc, char *argv[]) {
         three_region_pass = false;
       if (input.get_number_photons() != 10000)
         three_region_pass = false;
-      // Even though input says 10k, this defaults to the replicated
-      // value of 100M when you're running 1 MPI rank.
-      if (input.get_batch_size() != 100000000)
+      if (input.get_dd_batch_size() != 1000)
+        three_region_pass = false;
+      if (input.get_event_batch_size() != 5000)
         three_region_pass = false;
       if (input.get_particle_message_size() != 1000)
         three_region_pass = false;

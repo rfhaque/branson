@@ -326,6 +326,7 @@ inline void device_debug_print(size_t n_photons, const std::string &alg_type) {}
 
 #ifdef caliper_FOUND
 
+/*
 void wrapped_cali_mark_begin(const char *timer_name) {
     CALI_MARK_BEGIN(timer_name);
 }
@@ -348,6 +349,7 @@ void wrapped_cali_mark_end(const char *timer_name) {
     std::cout<<"Branson built without caliper, not ending timer: "<<timer_name<<std::endl;
   }
 }
+*/
 
 #endif
 

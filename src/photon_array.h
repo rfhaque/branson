@@ -226,6 +226,43 @@ public:
        std::copy(sub_batch.rng.begin(), sub_batch.rng.end(), rng.begin() + batch_start); // Copy back RNG state
    }
 
+  // remove particles that did not reach census with simple partition sort
+  void remove_inactive_particles() {
+    std::cout<<"Removing inactive particles, pre size: "<<descriptors.size()<<std::endl;
+    const size_t new_census_size =  std::count_if(descriptors.begin(), descriptors.end(), [] (const auto idesc) {return idesc == Constants::CENSUS;});
+    std::cout<<"New size should be: "<<new_census_size<<std::endl;
+    size_t i = 0;
+    size_t j = descriptors.size()- 1;
+    while (i < j) {
+      while (i < j && descriptors[i] == Constants::CENSUS) ++i; // find not CENSUS from the left
+      while (i < j && descriptors[j] != Constants::CENSUS) --j; // find CENSUS from the right
+      if (i < j) {
+        std::swap(descriptors[i], descriptors[j]);
+        std::swap(cell_ID[i], cell_ID[j]);
+        std::swap(group[i], group[j]);
+        std::swap(source_type[i], source_type[j]);
+        std::swap(pos[i], pos[j]);
+        std::swap(E[i], E[j]);
+        std::swap(E0[i], E0[j]);
+        std::swap(life_dx[i], life_dx[j]);
+        std::swap(rng[i], rng[j]);
+        i++;
+        j--;
+      }
+    }
+    descriptors.erase(descriptors.begin() + new_census_size, descriptors.end());
+    cell_ID.erase(cell_ID.begin() + new_census_size, cell_ID.end());
+    group.erase(group.begin() + new_census_size, group.end());
+    source_type.erase(source_type.begin() + new_census_size, source_type.end());
+    pos.erase(pos.begin() + new_census_size, pos.end());
+    angle.erase(angle.begin() + new_census_size, angle.end());
+    E.erase(E.begin() + new_census_size, E.end());
+    E0.erase(E0.begin() + new_census_size, E0.end());
+    life_dx.erase(life_dx.begin() + new_census_size, life_dx.end());
+    rng.erase(rng.begin() + new_census_size, rng.end());
+    std::cout<<"Double check new pos size: "<<pos.size()<<std::endl;
+  }
+
 };
 
 // Remove the old Photon class definition that wrapped PhotonArray

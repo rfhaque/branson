@@ -39,7 +39,6 @@ void imc_particle_pass_driver(Mesh &mesh, IMC_State &imc_state,
   using std::vector;
   vector<double> abs_E(mesh.get_n_local_cells(), 0.0);
   vector<double> track_E(mesh.get_n_local_cells(), 0.0);
-  Census_T census_photons;
   auto n_user_photons = imc_parameters.get_n_user_photons();
   Message_Counter mctr;
   const int rank = mpi_info.get_rank();
@@ -62,25 +61,18 @@ void imc_particle_pass_driver(Mesh &mesh, IMC_State &imc_state,
     MPI_Allreduce(MPI_IN_PLACE, &global_source_energy, 1, MPI_DOUBLE, MPI_SUM,
                   MPI_COMM_WORLD);
 
-    imc_state.set_pre_census_E(get_photon_list_E(census_photons));
-
     // make gpu setup object, may want to source on GPU later so make it before sourcing here
-    GPU_Setup gpu_setup(rank, n_ranks, imc_parameters.get_use_gpu_transporter_flag(), mesh.get_cells());
+    GPU_Setup<Census_T> gpu_setup(rank, n_ranks, imc_parameters.get_use_gpu_transporter_flag(), mesh.get_cells(), n_user_photons);
 
     // setup source
     Timer t_source;
     t_source.start_timer("source");
-    wrapped_cali_mark_begin("source");
-    if (imc_state.get_step() == 1)
-      census_photons = make_initial_census_photons<Census_T>(imc_state.get_dt(), mesh, rank, seed, n_user_photons, global_source_energy);
 
-    imc_state.set_pre_census_E(get_photon_list_E(census_photons));
+    make_photons<Census_T>(imc_state.get_dt(), mesh, rank, imc_state.get_step(), seed, n_user_photons, global_source_energy, gpu_setup);
+    auto &all_photons = gpu_setup.get_census_photons();
+    imc_state.set_pre_census_E(get_photon_list_census_E(all_photons));
+
     MPI_Barrier(MPI_COMM_WORLD);
-    // make emission and source photons
-    auto all_photons = make_photons<Census_T>(imc_state.get_dt(), mesh, rank, imc_state.get_step(), seed, n_user_photons, global_source_energy);
-    // add the census photons
-    join_photon_arrays(all_photons,census_photons);
-    wrapped_cali_mark_end("source");
     t_source.stop_timer("source");
     if (rank ==0)
       std::cout<<"source time: "<<t_source.get_time("source")<<std::endl;
@@ -91,7 +83,7 @@ void imc_particle_pass_driver(Mesh &mesh, IMC_State &imc_state,
 
     // add barrier here to make sure the transport timer starts at roughly the same time
     MPI_Barrier(MPI_COMM_WORLD);
-    census_photons = particle_pass_transport(mesh, gpu_setup, imc_parameters, mpi_info, mpi_types, imc_state, mctr, abs_E, track_E, all_photons);
+    particle_pass_transport(mesh, gpu_setup, imc_parameters, mpi_info, mpi_types, imc_state, mctr, abs_E, track_E, all_photons);
 
     mesh.update_temperature(abs_E, track_E, imc_state);
 

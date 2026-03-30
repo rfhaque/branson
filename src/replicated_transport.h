@@ -67,22 +67,20 @@ void print_memory_footprint(const T& particle_container, const std::string& cont
 }
 
 template <typename Census_T>
-Census_T replicated_transport(
-  const Mesh& mesh, const GPU_Setup& gpu_setup, IMC_State& imc_state,
-  std::vector<double>& rank_abs_E, std::vector<double>& rank_track_E,
-  Census_T& all_photons, const IMC_Parameters &imc_parameters
-  ) {
+void replicated_transport(const Mesh& mesh, const GPU_Setup<Census_T>& gpu_setup, IMC_State& imc_state,
+  std::vector<double>& rank_abs_E, std::vector<double>& rank_track_E, Census_T& all_photons,
+  const IMC_Parameters &imc_parameters) {
   using std::cout;
   using std::endl;
   using std::vector;
 
   // Print total memory footprint information
-  cout << "\n=== Total Particle Memory Usage ===" << endl;
-  print_memory_footprint(all_photons, std::is_same_v<Census_T, std::vector<Photon>> ? "AoS (vector<Photon>)" : "SoA (PhotonArray)");
+  //cout << "\n=== Total Particle Memory Usage ===" << endl;
+  //print_memory_footprint(all_photons, std::is_same_v<Census_T, std::vector<Photon>> ? "AoS (vector<Photon>)" : "SoA (PhotonArray)");
 
   // Print theoretical batch memory calculation once at the start (for CPU event-based)
   if (imc_parameters.get_transport_algorithm() == Constants::EVENT) {
-      auto event_batch_size = imc_parameters.get_batch_size();
+      auto event_batch_size = imc_parameters.get_event_batch_size();
       size_t batch_memory = 0;
       if constexpr (std::is_same_v<Census_T, std::vector<Photon>>) {
         batch_memory = event_batch_size * sizeof(Photon);
@@ -133,18 +131,16 @@ Census_T replicated_transport(
   // timing
   Timer t_transport;
   t_transport.start_timer("timestep transport");
-  wrapped_cali_mark_begin("timestep transport");
 
   //------------------------------------------------------------------------//
   // main transport loop
   //------------------------------------------------------------------------//
 
-  Census_T census_list;   //! End of timestep census list
   vector<Cell_Tally> cell_tallies(mesh.get_n_local_cells()); // Initialize tallies (zeroed)
   uint32_t rank_cell_offset{ 0 }; // no offset in replicated mesh
-  std::vector<std::vector<Photon>> null_send_list(0); // note used in replicated mode
+  std::vector<std::vector<Photon>> null_send_list(0); // not used in replicated mode
 
-  auto [batch_complete, batch_exit_E, batch_census_E] = batch_transport(next_dt, gpu_available, gpu_setup, imc_parameters, rank_cell_offset, mesh, all_photons, census_list, null_send_list, cell_tallies, t_transport);
+  auto [batch_complete, batch_exit_E, batch_census_E] = batch_transport(next_dt, gpu_available, gpu_setup, imc_parameters, rank_cell_offset, mesh, all_photons, null_send_list, cell_tallies, t_transport);
   auto n_complete = batch_complete;
   census_E += batch_census_E;
   exit_E += batch_exit_E;
@@ -157,21 +153,21 @@ Census_T replicated_transport(
   }
 
   // record time of transport work for this rank
-  wrapped_cali_mark_end("timestep transport");
   t_transport.stop_timer("timestep transport");
 
   // wait for all ranks to finish
   MPI_Barrier(MPI_COMM_WORLD);
 
-
   // set diagnostic quantities
   imc_state.set_exit_E(exit_E);
   imc_state.set_post_census_E(census_E);
-  imc_state.set_census_size(census_list.size());
   imc_state.set_rank_transport_runtime(
     t_transport.get_time("timestep transport"));
 
-  return census_list;
+  // remove everything but photons marked census
+  remove_inactive_photons(all_photons);
+
+  imc_state.set_census_size(all_photons.size());
 }
 
 #endif // def transport_replicated_h_
