@@ -61,6 +61,8 @@ public:
   double get_time(std::string name) {
 #ifndef caliper_FOUND
     return times[name];
+#else
+    return 0.0;
 #endif
   }
 
