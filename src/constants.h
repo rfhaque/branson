@@ -14,7 +14,12 @@
 
 namespace Constants {
 constexpr double pi(3.1415926535897932384626433832795); //!< Pi
+constexpr double sqrt_pi(1.7724538509055159); //!< Pi**0.5
+double constexpr m = 510.998928;       // keV
+double constexpr one_over_m = 1.0 / m; // 1/keV
+
 constexpr double c(299.792458); //!< speed of light in cm/shake
+constexpr double inv_c(1.0/c); //!< inverse speed of light in shake/cm
 constexpr double c_SO(1.0);     //!< speed of light for Su-Olson problem
 constexpr double h(6.62606957e-34 * 1.0e-9 /
                1.0e-8);      //!< Planck's constant in GJ/sh
