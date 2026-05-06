@@ -652,11 +652,13 @@ void decompose_mesh(Proto_Mesh &mesh, const MPI_Types &mpi_types,
   remap_cell_and_grip_indices_allreduce(mesh, rank, n_rank);
   t_remap.stop_timer("remap");
 
+#ifndef caliper_FOUND
   if (rank == 0) {
     std::cout << "Partition: " << t_partition.get_time("partition")<<" seconds"
               << std::endl;
     std::cout << "Remap: " << t_remap.get_time("remap") <<" seconds"<<std::endl;
   }
+#endif
 }
 
 //! Create replicated mesh by giving all cells to all other processors, renumber
