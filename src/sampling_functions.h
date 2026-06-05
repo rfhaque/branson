@@ -58,7 +58,7 @@ GPU_HOST_DEVICE inline std::array<double, 3>  get_uniform_position_on_face(const
 GPU_HOST_DEVICE inline std::pair<double, std::array<double, 3>> intensive_scatter(const double temperature, const double nu_in, const std::array<double,3> omega_in, RNG &rand) {
   using Constants::pi;
   using Constants::c;
-  using Constants::one_over_m;
+  using Constants::one_over_m_1;
 
   // velocity used in scattering and sampling
   std::array<double,3> velocity;
@@ -99,7 +99,7 @@ GPU_HOST_DEVICE inline std::pair<double, std::array<double, 3>> intensive_scatte
     scattering_functions::Check(nu_in_0 > 0.0, __LINE__);
 
     // transform frequency to be unitless using
-    E = nu_in_0 * one_over_m;
+    E = nu_in_0 * one_over_m_1;
     scattering_functions::Check(E > 0.0, __LINE__);
     const double TwoE = 2.0 * E;
     const double Esquared = E * E;
@@ -131,7 +131,12 @@ GPU_HOST_DEVICE inline std::pair<double, std::array<double, 3>> intensive_scatte
   } while (!done);
 
   // use the sampled velocity to slighty modify the photon angle
-  std::array<double,3> omega_out{omega_in[0] * (0.99 - 0.01 * 1.0/velocity[0]), omega_in[1] * (0.99 - 0.01 * 1.0/velocity[1]),  omega_in[2] * (0.99 - 0.01 * 1.0/velocity[2])};
+  std::array<double,3> modifier {(velocity[0] < 1.0) ? velocity[0] : 1.0/velocity[0],
+                                 (velocity[1] < 1.0) ? velocity[1] : 1.0/velocity[1],
+                                 (velocity[2] < 1.0) ? velocity[2] : 1.0/velocity[2]};
+
+
+  std::array<double,3> omega_out{omega_in[0] * (0.99 - 0.01 * modifier[0]), omega_in[1] * (0.99 - 0.01 *modifier[1]),  omega_in[2] * (0.99 - 0.01 * modifier[2])};
 
   scattering_functions::normalizer(omega_out);
   return {nu_in_0*(0.99 - 0.1* (1.0/rand.generate_random_number())), omega_out};

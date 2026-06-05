@@ -171,11 +171,11 @@ inline void process_scatter_events(PhotonArray& photon_array,
     if (rng.generate_random_number() > (sigma_s[i] / total_sigma_s[i])) {
       photon_array.group[photon_index] =
         sample_emission_group(rng, emission_groups[local_idx]);
-      // 10% chance of more intensive scatter
-      if (rng.generate_random_number() <= 0.1) {
+      // chance of more intensive scatter
+      if (rng.generate_random_number() <= Constants::intensive_scatter_fraction) {
         auto group = photon_array.group[photon_index];
         // get a frequency (faux multigroup so just sample from wide spectrum)
-        double freq = 0.001 + static_cast<double>(group)/static_cast<double>(BRANSON_N_GROUPS)*100.0; // keV
+        double freq = Constants::lower_frequency_bound + static_cast<double>(group)/static_cast<double>(BRANSON_N_GROUPS)*Constants::delta_frequency_bounds;
         auto angle = photon_array.angle[photon_index];
         auto new_energy_angle = intensive_scatter(cells[local_idx].get_T_e(), freq, angle, rng);
         photon_array.angle[photon_index] = new_energy_angle.second;
@@ -536,11 +536,11 @@ inline void process_scatter_events(std::vector<Photon>& photon_array,
 
     if (rng.generate_random_number() > (sigma_s[i] / total_sigma_s[i])) {
       phtn.set_group(sample_emission_group(rng, emission_groups[local_idx]));
-      // 10% chance of more intensive scatter
-      if (rng.generate_random_number() <= 0.1) {
+      // chance of more intensive scatter
+      if (rng.generate_random_number() <= Constants::intensive_scatter_fraction) {
         auto group = phtn.get_group();
         // get a frequency (faux multigroup so just sample from wide spectrum)
-        double freq = 0.001 + static_cast<double>(group)/static_cast<double>(BRANSON_N_GROUPS)*100.0; // keV
+        double freq = Constants::lower_frequency_bound + static_cast<double>(group)/static_cast<double>(BRANSON_N_GROUPS)*Constants::delta_frequency_bounds;
         auto angle = phtn.get_angle();
         auto new_energy_angle = intensive_scatter(cells[local_idx].get_T_e(), freq, angle, rng);
         phtn.set_angle(new_energy_angle.second);
