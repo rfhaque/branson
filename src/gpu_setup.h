@@ -39,8 +39,17 @@ public:
     }
 #endif
     if constexpr (std::is_same_v<Census_T, std::vector<Photon>>) {
+#ifdef caliper_FOUND
+    CALI_MARK_BEGIN("gpu_setup_0");
+#endif
       census_photons.reserve(n_user_photons);
+#ifdef caliper_FOUND
+    CALI_MARK_END("gpu_setup_0");
+#endif
     } else {
+#ifdef caliper_FOUND
+    CALI_MARK_BEGIN("gpu_setup_1");
+#endif
       census_photons.cell_ID.reserve(n_user_photons);
       census_photons.group.reserve(n_user_photons);
       census_photons.source_type.reserve(n_user_photons);
@@ -51,6 +60,9 @@ public:
       census_photons.E0.reserve(n_user_photons);
       census_photons.life_dx.reserve(n_user_photons);
       census_photons.rng.reserve(n_user_photons);
+#ifdef caliper_FOUND
+    CALI_MARK_END("gpu_setup_1");
+#endif
     }
   }
 

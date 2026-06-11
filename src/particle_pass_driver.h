@@ -70,7 +70,13 @@ void imc_particle_pass_driver(Mesh &mesh, IMC_State &imc_state,
 
     make_photons<Census_T>(imc_state.get_dt(), mesh, rank, imc_state.get_step(), seed, n_user_photons, global_source_energy, gpu_setup);
     auto &all_photons = gpu_setup.get_census_photons();
+#ifdef caliper_FOUND
+    CALI_MARK_BEGIN("set_pre_census_E");
+#endif
     imc_state.set_pre_census_E(get_photon_list_census_E(all_photons));
+#ifdef caliper_FOUND
+    CALI_MARK_END("set_pre_census_E");
+#endif
 
     MPI_Barrier(MPI_COMM_WORLD);
     t_source.stop_timer("source");

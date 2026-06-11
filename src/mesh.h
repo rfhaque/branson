@@ -250,6 +250,9 @@ public:
 
     uint32_t region_ID;
     Region region;
+#ifdef caliper_FOUND
+    CALI_MARK_BEGIN("calculate_photon_energy");
+#endif
     for (uint32_t i = 0; i < n_cell; ++i) {
       Cell &e = cells[i];
       vol = e.get_volume();
@@ -285,6 +288,9 @@ public:
       tot_source_E += m_source_E[i];
       total_photon_E += m_source_E[i] + m_census_E[i] + m_emission_E[i];
     }
+#ifdef caliper_FOUND
+    CALI_MARK_END("calculate_photon_energy");
+#endif
 
     // adjust the census, emission and source energies for replicated mode to avoid having multiple
     // ranks make small energy photons, recaculculate total_photon_E on this rank
@@ -346,6 +352,9 @@ public:
 
 
     // calculate new temperatures, update global conservation quantities
+#ifdef caliper_FOUND
+    CALI_MARK_BEGIN("update_temperature");
+#endif
     for (uint32_t i = 0; i < n_cell; ++i) {
       region_ID = cells[i].get_region_ID();
       region = regions[region_ID_to_index[region_ID]];
@@ -360,6 +369,9 @@ public:
       total_abs_E += abs_E[i];
       total_post_mat_E += T_new * cV * vol * rho;
     }
+#ifdef caliper_FOUND
+    CALI_MARK_END("update_temperature");
+#endif
 
     // verbose printing block
     if (verbose_print) {

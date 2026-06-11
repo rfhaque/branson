@@ -94,6 +94,9 @@ void make_photons(const double dt, const Mesh &mesh, const int rank, const uint3
 
   // figure out how many to make to size all_photons vector
   uint64_t n_photons = 0;
+#ifdef caliper_FOUND
+    CALI_MARK_BEGIN("make_photons_0");
+#endif
   for (auto const &cell : mesh) {
     int i = mesh.get_local_index(cell.get_global_index());
     // initial census
@@ -123,17 +126,29 @@ void make_photons(const double dt, const Mesh &mesh, const int rank, const uint3
       n_photons+=t_num_source;
     }
   }
+#ifdef caliper_FOUND
+    CALI_MARK_END("make_photons_0");
+#endif
 
+#ifdef caliper_FOUND
+    CALI_MARK_BEGIN("make_photons_1");
+#endif
   std::vector<uint64_t> photon_stream_nums(n_photons);
   std::vector<double> photon_E(n_photons);
   std::vector<int> photon_type(n_photons);
   std::vector<int> photon_source_face(n_photons);
   std::vector<uint32_t> photon_cell_index(n_photons);
+#ifdef caliper_FOUND
+    CALI_MARK_END("make_photons_1");
+#endif
 
   // in serial loop through and set the seed for each photon
   // use this to increment the seed for each photon
   uint64_t ith_photon{0UL};
 
+#ifdef caliper_FOUND
+    CALI_MARK_BEGIN("make_photons_2");
+#endif
   for (auto const &cell : mesh) {
     uint32_t i = mesh.get_local_index(cell.get_global_index());
     // initial census
@@ -183,6 +198,9 @@ void make_photons(const double dt, const Mesh &mesh, const int rank, const uint3
       }
     }
   }
+#ifdef caliper_FOUND
+    CALI_MARK_END("make_photons_2");
+#endif
 
   #ifdef USE_GPU
   // Copy input data to device
@@ -321,10 +339,16 @@ void make_photons(const double dt, const Mesh &mesh, const int rank, const uint3
 
     // Copy photon arrays back to host photon array object
     // CPU -> CPU copies
+#ifdef caliper_FOUND
+    CALI_MARK_BEGIN("make_photons_3");
+#endif
     std::copy( photon_E.begin(), photon_E.end(),  census_photons.E.begin() + n_census_photons);
     std::copy(photon_E.begin(), photon_E.end(), census_photons.E0.begin() + n_census_photons);
     std::copy( photon_type.begin(), photon_type.end(), census_photons.source_type.begin() + n_census_photons);
     std::fill(census_photons.descriptors.begin() + n_census_photons, census_photons.descriptors.end(), Constants::event_type::BORN_SOURCE);
+#ifdef caliper_FOUND
+    CALI_MARK_END("make_photons_3");
+#endif
     // GPU -> CPU copies
     copy_err = cudaMemcpy(census_photons.cell_ID.data() + n_census_photons, device_cell_index_ptr, n_photons * sizeof(uint32_t), cudaMemcpyDeviceToHost);
     Insist(!copy_err, "CUDA/HIP error copying cell indices back to host");
