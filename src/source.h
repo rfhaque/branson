@@ -16,6 +16,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include "config.h"
 #include "timer.h"
 #include "gpu_setup.h"
 #include "constants.h"
