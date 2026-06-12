@@ -77,9 +77,9 @@ void imc_particle_pass_driver(Mesh &mesh, IMC_State &imc_state,
 #ifdef caliper_FOUND
     CALI_MARK_END("set_pre_census_E");
 #endif
+    t_source.stop_timer("source");
 
     MPI_Barrier(MPI_COMM_WORLD);
-    t_source.stop_timer("source");
     if (rank ==0)
       std::cout<<"source time: "<<t_source.get_time("source")<<std::endl;
 

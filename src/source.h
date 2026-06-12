@@ -16,7 +16,6 @@
 #include <unordered_map>
 #include <vector>
 
-#include "config.h"
 #include "timer.h"
 #include "gpu_setup.h"
 #include "constants.h"
@@ -364,9 +363,15 @@ void make_photons(const double dt, const Mesh &mesh, const int rank, const uint3
 #endif
     Insist(!sync_err, "CUDA/HIP error synchronizing after source kernel");
 
+#ifdef caliper_FOUND
+    CALI_MARK_BEGIN("make_photons_2d");
+#endif
     PhotonArray &census_photons = gpu_setup.get_census_photons();
     auto n_census_photons = census_photons.size();
     census_photons.resize(n_census_photons + n_photons);
+#ifdef caliper_FOUND
+    CALI_MARK_END("make_photons_2d");
+#endif
 
     // Copy photon arrays back to host photon array object
     // CPU -> CPU copies
