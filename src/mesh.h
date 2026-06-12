@@ -250,9 +250,6 @@ public:
 
     uint32_t region_ID;
     Region region;
-#ifdef caliper_FOUND
-    CALI_MARK_BEGIN("calculate_photon_energy");
-#endif
     for (uint32_t i = 0; i < n_cell; ++i) {
       Cell &e = cells[i];
       vol = e.get_volume();
@@ -288,9 +285,6 @@ public:
       tot_source_E += m_source_E[i];
       total_photon_E += m_source_E[i] + m_census_E[i] + m_emission_E[i];
     }
-#ifdef caliper_FOUND
-    CALI_MARK_END("calculate_photon_energy");
-#endif
 
     // adjust the census, emission and source energies for replicated mode to avoid having multiple
     // ranks make small energy photons, recaculculate total_photon_E on this rank
