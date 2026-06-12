@@ -90,12 +90,12 @@ public:
       for (size_type j = 0; j < i; ++j) {
         std::destroy_at(new_data + j);
       }
-      std::free(new_data);
+      hostFree(new_data);
       throw;
     }
 
     destroy_range(0, size_);
-    std::free(data_);
+    hostFree(data_);
     data_ = new_data;
     capacity_ = new_capacity;
   }
@@ -163,11 +163,11 @@ private:
       return nullptr;
     }
 
-    void *raw = std::malloc(count * sizeof(T));
+    T* raw; hostMalloc(&raw, count * sizeof(T));
     if (raw == nullptr) {
       throw std::bad_alloc();
     }
-    return static_cast<T *>(raw);
+    return raw;
   }
 
   static size_type growth_capacity(size_type required) noexcept {
@@ -194,7 +194,7 @@ private:
 
   void reset() noexcept {
     clear();
-    std::free(data_);
+    hostFree(data_);
     data_ = nullptr;
     capacity_ = 0;
   }
@@ -217,7 +217,7 @@ private:
       for (size_type j = 0; j < i; ++j) {
         std::destroy_at(data_ + j);
       }
-      std::free(data_);
+      hostFree(data_);
       data_ = nullptr;
       capacity_ = 0;
       throw;
