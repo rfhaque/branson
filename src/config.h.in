@@ -190,46 +190,11 @@ GPU_HOST_DEVICE inline void accumulate(T &target, T const addend) {
   #endif
 }
 
-GPU_DEVICE inline uint64_t warp_active_mask() {
-#ifdef USE_CUDA
-  return __activemask();
-#else
-  return __ballot(true);
-#endif
-}
-
-GPU_DEVICE inline uint64_t warp_ballot_sync(uint64_t mask, bool pred) {
-#ifdef USE_CUDA
-  return __ballot_sync(mask, pred);
-#else
-  (void)mask;
-  return __ballot(pred);
-#endif
-}
-
-template <typename T>
-GPU_DEVICE inline T warp_shfl_sync(uint64_t mask, T value, int src_lane) {
-#ifdef USE_CUDA
-  return __shfl_sync(mask, value, src_lane);
-#else
-  (void)mask;
-  return __shfl(value, src_lane);
-#endif
-}
-
-GPU_DEVICE inline uint64_t warp_match_any_sync(uint64_t mask, uint32_t value) {
-#ifdef USE_CUDA
-  return __match_any_sync(mask, value);
-#else
-  return __match_any_sync(static_cast<unsigned long long>(mask), value);
-#endif
-}
-
 // Function to perform warp-level atomic increment with ballot
 GPU_DEVICE inline bool warp_atomic_inc_ballot(unsigned int* counter, bool pred, unsigned int& position) {
   #if defined(__HIP_DEVICE_COMPILE__) or defined(__CUDA_ARCH__)
     // Perform ballot operation to get a mask of threads satisfying the predicate
-    auto ballot_result = warp_ballot_sync(warp_active_mask(), pred);
+    auto ballot_result = __ballot_sync(__activemask(), pred);
     // If the current thread doesn't satisfy the predicate, return false
     if (!pred) {
         return false;
@@ -238,7 +203,7 @@ GPU_DEVICE inline bool warp_atomic_inc_ballot(unsigned int* counter, bool pred, 
     unsigned int lane_id = threadIdx.x % WARP_SIZE;
 
     // Get the mask of active threads in the warp
-    auto active = warp_ballot_sync(warp_active_mask(), true);
+    auto active = __ballot_sync(__activemask(), true);
     // Find the ID of the first active thread (leader)
     #ifdef USE_CUDA
     // Count the number of active threads
@@ -257,10 +222,9 @@ GPU_DEVICE inline bool warp_atomic_inc_ballot(unsigned int* counter, bool pred, 
     #else
     // Count the number of active threads
     int num_active = __popcll(active);
-    auto leader_lane = __ffsll(static_cast<unsigned long long>(ballot_result)) - 1;
+    auto leader_lane = __ffsll(ballot_result) - 1;
     // Create a mask of threads before the current one
-    uint64_t mask_before = ballot_result &
-                           ((static_cast<unsigned long long>(1) << lane_id) - 1ULL);
+    uint64_t mask_before = ballot_result & ((1UL << lane_id) - 1UL);
     // Count how many threads are active before this one
     unsigned int local_rank = __popcll(mask_before);
 
@@ -272,7 +236,7 @@ GPU_DEVICE inline bool warp_atomic_inc_ballot(unsigned int* counter, bool pred, 
     #endif
 
     // Broadcast the base offset to all threads in the warp
-    unsigned int base_index = warp_shfl_sync(ballot_result, warp_base_offset, leader_lane);
+    unsigned int base_index = __shfl_sync(ballot_result, warp_base_offset, leader_lane);
     // Calculate the final position for this thread
     position = base_index + local_rank;
     #endif
@@ -282,10 +246,10 @@ GPU_DEVICE inline bool warp_atomic_inc_ballot(unsigned int* counter, bool pred, 
 GPU_HOST_DEVICE inline void warp_atomic_addh(double *address, uint32_t cell_idx, double val) {
   #if defined(__HIP_DEVICE_COMPILE__) or defined(__CUDA_ARCH__)
     // Get the mask of active threads in the warp
-    const auto active_mask = warp_active_mask();
+    const auto active_mask = __activemask();
 
     // Get the mask of threads with matching cell_idx
-    const auto group_mask = warp_match_any_sync(active_mask, cell_idx);
+    const auto group_mask = __match_any_sync(active_mask, cell_idx);
 
     // Calculate the lane ID within the warp (0-32 or 0-64)
     unsigned int lane_id = threadIdx.x % WARP_SIZE;
@@ -293,13 +257,13 @@ GPU_HOST_DEVICE inline void warp_atomic_addh(double *address, uint32_t cell_idx,
     #ifdef USE_CUDA
     auto first_lane = __ffs(group_mask) - 1;
     #else
-    auto first_lane = __ffsll(static_cast<unsigned long long>(group_mask)) - 1;
+    auto first_lane = __ffsll(group_mask) - 1;
     #endif
 
     double subgroup_sum = 0.0;
     for (int i = 0; i < WARP_SIZE; i++) {
       if ((group_mask >> i) & 1) {
-        subgroup_sum += warp_shfl_sync(group_mask, val, i);
+        subgroup_sum += __shfl_sync(group_mask, val, i);
       }
     }
     if (lane_id == first_lane) {
@@ -311,10 +275,10 @@ GPU_HOST_DEVICE inline void warp_atomic_addh(double *address, uint32_t cell_idx,
 GPU_HOST_DEVICE inline void warp_atomic_add(double *address, uint32_t cell_idx, double val) {
   #if defined(__HIP_DEVICE_COMPILE__) or defined(__CUDA_ARCH__)
     // Get the mask of active threads in the warp
-    const auto active_mask = warp_active_mask();
+    const auto active_mask = __activemask();
 
     // Get the mask of threads with matching cell_idx
-    const auto group_mask = warp_match_any_sync(active_mask, cell_idx);
+    const auto group_mask = __match_any_sync(active_mask, cell_idx);
 
     // Calculate the lane ID within the warp (0-31 or 0-64)
     unsigned int lane_id = threadIdx.x % WARP_SIZE;
@@ -322,14 +286,14 @@ GPU_HOST_DEVICE inline void warp_atomic_add(double *address, uint32_t cell_idx, 
     #ifdef USE_CUDA
     auto first_lane = __ffs(group_mask) - 1;
     #else
-    auto first_lane = __ffsll(static_cast<unsigned long long>(group_mask)) - 1;
+    auto first_lane = __ffsll(group_mask) - 1;
     #endif
 
     double subgroup_sum = 0.0;
     #pragma unroll
     for (int i = 0; i < WARP_SIZE; i++) {
       if ((group_mask >> i) & 1) {
-        subgroup_sum += warp_shfl_sync(group_mask, val, i);
+        subgroup_sum += __shfl_sync(group_mask, val, i);
       }
     }
     if (lane_id == first_lane) {
