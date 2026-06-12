@@ -13,6 +13,7 @@
 #include <string>
 #include <sys/time.h>
 #include <time.h>
+#include "branson_allocator.h"
 #include "branson_vector.h"
 
 #include "config.h"
