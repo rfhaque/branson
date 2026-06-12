@@ -52,10 +52,17 @@ void imc_particle_pass_driver(Mesh &mesh, IMC_State &imc_state,
 
   const uint32_t seed = imc_parameters.get_rng_seed();
 
-  while (!imc_state.finished()) {
-    if (rank == 0)
+  bool done = imc_state.finished();
+  while (!done) {
+    if (rank == 0) {
+#ifdef caliper_FOUND
+    CALI_MARK_BEGIN("ppa_print_timestep_header");
+#endif
       imc_state.print_timestep_header();
-
+#ifdef caliper_FOUND
+    CALI_MARK_END("ppa_print_timestep_header");
+#endif
+    }
 #ifdef caliper_FOUND
     CALI_MARK_BEGIN("ppa_reset_ctrs");
 #endif
@@ -101,7 +108,13 @@ void imc_particle_pass_driver(Mesh &mesh, IMC_State &imc_state,
     if (rank ==0)
       std::cout<<"source time: "<<t_source.get_time("source")<<std::endl;
 
+#ifdef caliper_FOUND
+    CALI_MARK_BEGIN("ppa_set_transported_particles");
+#endif
     imc_state.set_transported_particles(all_photons.size());
+#ifdef caliper_FOUND
+    CALI_MARK_END("ppa_set_transported_particles");
+#endif
 
 #ifdef caliper_FOUND
     CALI_MARK_BEGIN("ppa_print_memory_estimate");
@@ -155,7 +168,20 @@ void imc_particle_pass_driver(Mesh &mesh, IMC_State &imc_state,
     CALI_MARK_END("ppa_write_silo");
 #endif
 
+#ifdef caliper_FOUND
+    CALI_MARK_BEGIN("ppa_next_time_step");
+#endif
     imc_state.next_time_step();
+#ifdef caliper_FOUND
+    CALI_MARK_END("ppa_next_time_step");
+#endif
+#ifdef caliper_FOUND
+    CALI_MARK_BEGIN("ppa_finished");
+#endif
+    done = imc_state.finished();
+#ifdef caliper_FOUND
+    CALI_MARK_END("ppa_finished");
+#endif
   }
 }
 
