@@ -111,9 +111,7 @@ public:
       reserve(growth_capacity(new_size));
     }
 
-    for (size_type i = size_; i < new_size; ++i) {
-      new (data_ + i) T();
-    }
+    std::uninitialized_default_construct_n(data_ + size_, new_size - size_);
     size_ = new_size;
   }
 
