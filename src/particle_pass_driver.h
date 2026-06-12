@@ -56,10 +56,22 @@ void imc_particle_pass_driver(Mesh &mesh, IMC_State &imc_state,
     if (rank == 0)
       imc_state.print_timestep_header();
 
+#ifdef caliper_FOUND
+    CALI_MARK_BEGIN("ppa_reset_ctrs");
+#endif
     mctr.reset_counters();
+#ifdef caliper_FOUND
+    CALI_MARK_END("ppa_reset_ctrs");
+#endif
 
     //set opacity, Fleck factor, all energy to source
+#ifdef caliper_FOUND
+    CALI_MARK_BEGIN("ppa_calculate_photon_energy");
+#endif
     mesh.calculate_photon_energy(imc_state, n_user_photons);
+#ifdef caliper_FOUND
+    CALI_MARK_END("ppa_calculate_photon_energy");
+#endif
 
     // all reduce to get total source energy to make correct number of
     // particles on each rank
@@ -67,8 +79,14 @@ void imc_particle_pass_driver(Mesh &mesh, IMC_State &imc_state,
     MPI_Allreduce(MPI_IN_PLACE, &global_source_energy, 1, MPI_DOUBLE, MPI_SUM,
                   MPI_COMM_WORLD);
 
+#ifdef caliper_FOUND
+    CALI_MARK_BEGIN("ppa_gpu_setup");
+#endif
     // make gpu setup object, may want to source on GPU later so make it before sourcing here
     GPU_Setup<Census_T> gpu_setup(rank, n_ranks, imc_parameters.get_use_gpu_transporter_flag(), mesh.get_cells(), n_user_photons);
+#ifdef caliper_FOUND
+    CALI_MARK_END("ppa_gpu_setup");
+#endif
 
     // setup source
     Timer t_source;
@@ -85,18 +103,45 @@ void imc_particle_pass_driver(Mesh &mesh, IMC_State &imc_state,
 
     imc_state.set_transported_particles(all_photons.size());
 
+#ifdef caliper_FOUND
+    CALI_MARK_BEGIN("ppa_print_memory_estimate");
+#endif
     imc_state.print_memory_estimate(rank, n_ranks, mesh.get_n_local_cells(), all_photons.size());
+#ifdef caliper_FOUND
+    CALI_MARK_END("ppa_print_memory_estimate");
+#endif
 
     // add barrier here to make sure the transport timer starts at roughly the same time
     MPI_Barrier(MPI_COMM_WORLD);
+#ifdef caliper_FOUND
+    CALI_MARK_BEGIN("ppa_particle_pass_transport");
+#endif
     particle_pass_transport(mesh, gpu_setup, imc_parameters, mpi_info, mpi_types, imc_state, mctr, abs_E, track_E, all_photons);
+#ifdef caliper_FOUND
+    CALI_MARK_END("ppa_particle_pass_transport");
+#endif
 
+#ifdef caliper_FOUND
+    CALI_MARK_BEGIN("ppa_update_temperature");
+#endif
     mesh.update_temperature(abs_E, track_E, imc_state);
+#ifdef caliper_FOUND
+    CALI_MARK_END("ppa_update_temperature");
+#endif
 
     // update time for next step
+#ifdef caliper_FOUND
+    CALI_MARK_BEGIN("ppa_print_conservation");
+#endif
     imc_state.print_conservation(imc_parameters.get_dd_mode());
+#ifdef caliper_FOUND
+    CALI_MARK_END("ppa_print_conservation");
+#endif
 
     // write SILO file if it's enabled and it's the right cycle
+#ifdef caliper_FOUND
+    CALI_MARK_BEGIN("ppa_write_silo");
+#endif
     if (imc_parameters.get_write_silo_flag() &&
         !(imc_state.get_step() % imc_parameters.get_output_frequency())) {
       // write SILO file
@@ -106,6 +151,9 @@ void imc_particle_pass_driver(Mesh &mesh, IMC_State &imc_state,
                  imc_state.get_rank_transport_runtime(), fake_mpi_runtime, rank,
                  n_ranks, replicated_flag);
     }
+#ifdef caliper_FOUND
+    CALI_MARK_END("ppa_write_silo");
+#endif
 
     imc_state.next_time_step();
   }
