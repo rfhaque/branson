@@ -127,16 +127,11 @@ void make_photons(const double dt, const Mesh &mesh, const int rank, const uint3
 #ifdef caliper_FOUND
     CALI_MARK_BEGIN("vec_make_photons");
 #endif
-  MallocVector<uint64_t> photon_stream_nums;
-  MallocVector<double> photon_E;
-  MallocVector<int> photon_type;
-  MallocVector<int> photon_source_face;
-  MallocVector<uint32_t> photon_cell_index;
-  photon_stream_nums.reserve(n_photons);
-  photon_E.reserve(n_photons);
-  photon_type.reserve(n_photons);
-  photon_source_face.reserve(n_photons);
-  photon_cell_index.reserve(n_photons);
+  uint64_t* photon_stream_nums = std::malloc(n_photons*sizeof(uint64_t));
+  double* photon_E = std::malloc(n_photons*sizeof(double));
+  int* photon_type = std::malloc(n_photons*sizeof(int));
+  int* photon_source_face = std::malloc(n_photons*sizeof(int));
+  uint32_t* photon_cell_index = std::malloc(n_photons*sizeof(uint32_t));
 #ifdef caliper_FOUND
     CALI_MARK_END("vec_make_photons");
 #endif
@@ -200,39 +195,39 @@ void make_photons(const double dt, const Mesh &mesh, const int rank, const uint3
   uint64_t *device_photon_stream_nums_ptr;
   auto alloc_err = cudaMalloc((void **)&device_photon_stream_nums_ptr, sizeof(uint64_t) * n_photons);
   Insist(!alloc_err, "CUDA/HIP error allocating photon seeds");
-  auto copy_err = cudaMemcpy(device_photon_stream_nums_ptr, photon_stream_nums.data(), sizeof(uint64_t) * n_photons, cudaMemcpyHostToDevice);
+  auto copy_err = cudaMemcpy(device_photon_stream_nums_ptr, photon_stream_nums, sizeof(uint64_t) * n_photons, cudaMemcpyHostToDevice);
   Insist(!copy_err, "CUDA/HIP error copying photon seeds to device");
 
   double *device_photon_E_ptr;
   alloc_err = cudaMalloc((void **)&device_photon_E_ptr, sizeof(double) * n_photons);
   Insist(!alloc_err, "CUDA/HIP error allocating photon E");
-  copy_err = cudaMemcpy(device_photon_E_ptr, photon_E.data(), sizeof(double) * n_photons, cudaMemcpyHostToDevice);
+  copy_err = cudaMemcpy(device_photon_E_ptr, photon_E, sizeof(double) * n_photons, cudaMemcpyHostToDevice);
   Insist(!copy_err, "CUDA/HIP error copying photon E to device");
 
   int  *device_source_type_ptr;
   alloc_err = cudaMalloc((void **)&device_source_type_ptr, sizeof(int) * n_photons);
   Insist(!alloc_err, "CUDA/HIP error allocating photon types");
-  copy_err = cudaMemcpy(device_source_type_ptr, photon_type.data(), sizeof(int) * n_photons, cudaMemcpyHostToDevice);
+  copy_err = cudaMemcpy(device_source_type_ptr, photon_type, sizeof(int) * n_photons, cudaMemcpyHostToDevice);
   Insist(!copy_err, "CUDA/HIP error copying photon_types to device");
 
   int  *device_photon_source_face_ptr;
   alloc_err = cudaMalloc((void **)&device_photon_source_face_ptr, sizeof(int) * n_photons);
   Insist(!alloc_err, "CUDA/HIP error allocating photon source face");
-  copy_err = cudaMemcpy(device_photon_source_face_ptr, photon_source_face.data(), sizeof(int) * n_photons, cudaMemcpyHostToDevice);
+  copy_err = cudaMemcpy(device_photon_source_face_ptr, photon_source_face, sizeof(int) * n_photons, cudaMemcpyHostToDevice);
   Insist(!copy_err, "CUDA/HIP error copying photon source face to device");
 
   uint32_t  *device_cell_index_ptr;
   alloc_err = cudaMalloc((void **)&device_cell_index_ptr, sizeof(uint32_t) * n_photons);
   Insist(!alloc_err, "CUDA/HIP error allocating photon cell index");
-  copy_err = cudaMemcpy(device_cell_index_ptr, photon_cell_index.data(), sizeof(uint32_t) * n_photons, cudaMemcpyHostToDevice);
+  copy_err = cudaMemcpy(device_cell_index_ptr, photon_cell_index, sizeof(uint32_t) * n_photons, cudaMemcpyHostToDevice);
   Insist(!copy_err, "CUDA/HIP error copying photon cell index to device");
   #else
   // use device pointers with host side data to share code below
-  uint64_t *device_photon_stream_nums_ptr = photon_stream_nums.data();
-  double *device_photon_E_ptr  = photon_E.data();
-  int  *device_source_type_ptr = photon_type.data();
-  int  *device_photon_source_face_ptr = photon_source_face.data();
-  uint32_t  *device_cell_index_ptr = photon_cell_index.data();
+  uint64_t *device_photon_stream_nums_ptr = photon_stream_nums;
+  double *device_photon_E_ptr  = photon_E;
+  int  *device_source_type_ptr = photon_type;
+  int  *device_photon_source_face_ptr = photon_source_face;
+  uint32_t  *device_cell_index_ptr = photon_cell_index;
   #endif
   // where Aos and SoA diverge--input data above is used for both, but AoS makes its array of
   // photons to be populated by GPU kernel now, SoA can use some of these input structs directly
@@ -338,9 +333,9 @@ void make_photons(const double dt, const Mesh &mesh, const int rank, const uint3
 
     // Copy photon arrays back to host photon array object
     // CPU -> CPU copies
-    std::copy( photon_E.begin(), photon_E.end(),  census_photons.E.begin() + n_census_photons);
-    std::copy(photon_E.begin(), photon_E.end(), census_photons.E0.begin() + n_census_photons);
-    std::copy( photon_type.begin(), photon_type.end(), census_photons.source_type.begin() + n_census_photons);
+    std::copy( photon_E, photon_E+nphotons,  census_photons.E.begin() + n_census_photons);
+    std::copy(photon_E, photon_E+nphotons, census_photons.E0.begin() + n_census_photons);
+    std::copy( photon_type, photon_type+nphotons, census_photons.source_type.begin() + n_census_photons);
     std::fill(census_photons.descriptors.begin() + n_census_photons, census_photons.descriptors.end(), Constants::event_type::BORN_SOURCE);
     // GPU -> CPU copies
     copy_err = cudaMemcpy(census_photons.cell_ID.data() + n_census_photons, device_cell_index_ptr, n_photons * sizeof(uint32_t), cudaMemcpyDeviceToHost);
@@ -373,10 +368,10 @@ void make_photons(const double dt, const Mesh &mesh, const int rank, const uint3
       n_photons, device_cell_index_ptr, device_rng_ptr, device_pos_ptr, device_angle_ptr,
       device_life_dx_ptr, device_group_ptr);
 
-    std::copy( photon_cell_index.begin() , photon_cell_index.end(), census_photons.cell_ID.begin() + n_census_photons);
-    std::copy( photon_E.begin(), photon_E.end(),  census_photons.E.begin() + n_census_photons);
-    std::copy(photon_E.begin(), photon_E.end(), census_photons.E0.begin() + n_census_photons);
-    std::copy( photon_type.begin(), photon_type.end(), census_photons.source_type.begin() + n_census_photons);
+    std::copy( photon_cell_index , photon_cell_index+nphotons, census_photons.cell_ID.begin() + n_census_photons);
+    std::copy( photon_E, photon_E+nphotons,  census_photons.E.begin() + n_census_photons);
+    std::copy(photon_E, photon_E+nphotons, census_photons.E0.begin() + n_census_photons);
+    std::copy( photon_type, photon_type+nphotons, census_photons.source_type.begin() + n_census_photons);
     std::fill(census_photons.descriptors.begin() + n_census_photons, census_photons.descriptors.end(), Constants::event_type::BORN_SOURCE);
   #endif
   }
