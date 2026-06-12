@@ -45,6 +45,10 @@ int main(int argc, char **argv) {
     exit(EXIT_FAILURE);
   }
 
+#ifdef USE_UMPIRE
+  makeUmpireHostPool();
+#endif
+
   // wrap main loop scope so objcts are destroyed before mpi_finalize is called
   {
     // get MPI parmeters and set them in mpi_info

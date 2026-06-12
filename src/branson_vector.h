@@ -20,6 +20,8 @@
 #include <type_traits>
 #include <utility>
 
+#include "config.h"
+
 namespace branson {
 
 template <typename T> class vector {
@@ -36,7 +38,10 @@ public:
 
   vector() = default;
 
-  explicit vector(const size_type count) { resize(count); }
+  explicit vector(const size_type count) {
+    resize(count);
+    std::fill(begin(), end(), T{});
+  }
 
   vector(const size_type count, const T &value) {
     resize(count);
@@ -118,7 +123,7 @@ public:
       }
     } catch (...) {
       destroy_range(new_data, new_capacity);
-      std::free(new_data);
+      deallocate_storage(new_data);
       throw;
     }
 
@@ -256,7 +261,7 @@ private:
       throw std::bad_array_new_length();
     }
 
-    void *raw = std::malloc(count * sizeof(T));
+    void *raw = allocate_storage(count * sizeof(T));
     if (raw == nullptr) {
       throw std::bad_alloc();
     }
@@ -269,7 +274,7 @@ private:
       }
     } catch (...) {
       destroy_range(data, constructed);
-      std::free(data);
+      deallocate_storage(data);
       throw;
     }
 
@@ -281,6 +286,24 @@ private:
       return;
     }
     std::destroy_n(data, count);
+  }
+
+  static void *allocate_storage(const size_t bytes) {
+#ifdef USE_UMPIRE
+    return bransonHostAllocate(bytes);
+#else
+    return std::malloc(bytes);
+#endif
+  }
+
+  static void deallocate_storage(void *ptr) noexcept {
+#ifdef USE_UMPIRE
+    if (ptr != nullptr) {
+      bransonHostDeallocate(ptr);
+    }
+#else
+    std::free(ptr);
+#endif
   }
 
   static size_type growth_capacity(const size_type current_capacity,
@@ -333,7 +356,7 @@ private:
       }
     } catch (...) {
       destroy_range(new_data, other.capacity_);
-      std::free(new_data);
+      deallocate_storage(new_data);
       throw;
     }
 
@@ -353,7 +376,7 @@ private:
 
   void destroy_and_deallocate() noexcept {
     destroy_range(data_, capacity_);
-    std::free(data_);
+    deallocate_storage(data_);
     data_ = nullptr;
     size_ = 0;
     capacity_ = 0;
