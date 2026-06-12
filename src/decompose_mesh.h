@@ -83,7 +83,7 @@ branson::vector<int> metis_partition(Proto_Mesh &mesh, int &edgecut, const int r
 
   MPI_Allreduce(MPI_IN_PLACE, &start_ncells[0], n_rank, MPI_INT, MPI_SUM,
                 MPI_COMM_WORLD);
-  partial_sum(start_ncells.begin(), start_ncells.end(), vtxdist.begin());
+  std::partial_sum(start_ncells.begin(), start_ncells.end(), vtxdist.begin());
   vtxdist.insert(vtxdist.begin(), 0);
 
   uint32_t n_global_cells = vtxdist.back();
@@ -390,7 +390,7 @@ void remap_cell_and_grip_indices_rma(Proto_Mesh &mesh, const int rank,
 
   // prefix sum on out_cells to get global numbering
   vector<uint32_t> prefix_cells_proc(n_rank, 0);
-  partial_sum(out_cells_proc.begin(), out_cells_proc.end(),
+  std::partial_sum(out_cells_proc.begin(), out_cells_proc.end(),
               prefix_cells_proc.begin());
 
   // set global numbering
@@ -510,7 +510,7 @@ void remap_cell_and_grip_indices_allreduce(Proto_Mesh &mesh, const int rank,
 
   // prefix sum on out_cells to get global numbering
   vector<uint32_t> prefix_cells_proc(n_rank, 0);
-  partial_sum(out_cells_proc.begin(), out_cells_proc.end(),
+  std::partial_sum(out_cells_proc.begin(), out_cells_proc.end(),
               prefix_cells_proc.begin());
 
   // set global numbering
@@ -535,7 +535,7 @@ void remap_cell_and_grip_indices_allreduce(Proto_Mesh &mesh, const int rank,
   MPI_Allreduce(MPI_IN_PLACE, &out_bcells_proc[0], n_rank, MPI_UNSIGNED,
                 MPI_SUM, MPI_COMM_WORLD);
 
-  partial_sum(out_bcells_proc.begin(), out_bcells_proc.end(),
+  std::partial_sum(out_bcells_proc.begin(), out_bcells_proc.end(),
               prefix_bcells_proc.begin());
   // insert zero at the start to get write location
   prefix_bcells_proc.insert(prefix_bcells_proc.begin(), 0);

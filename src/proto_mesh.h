@@ -428,7 +428,7 @@ public:
     remove_cell_list.clear();
 
     // sort based on global cell indices
-    sort(cell_list.begin(), cell_list.end());
+    std::sort(cell_list.begin(), cell_list.end());
   }
 
   //! Add mesh cell (used during decomposition, not parallel communication)
