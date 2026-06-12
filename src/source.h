@@ -132,11 +132,11 @@ void make_photons(const double dt, const Mesh &mesh, const int rank, const uint3
   MallocVector<int> photon_type;
   MallocVector<int> photon_source_face;
   MallocVector<uint32_t> photon_cell_index;
-  photon_stream_nums.resize(n_photons);
-  photon_E.resize(n_photons);
-  photon_type.resize(n_photons);
-  photon_source_face.resize(n_photons);
-  photon_cell_index.resize(n_photons);
+  photon_stream_nums.reserve(n_photons);
+  photon_E.reserve(n_photons);
+  photon_type.reserve(n_photons);
+  photon_source_face.reserve(n_photons);
+  photon_cell_index.reserve(n_photons);
 #ifdef caliper_FOUND
     CALI_MARK_END("vec_make_photons");
 #endif
