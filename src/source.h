@@ -389,6 +389,12 @@ void make_photons(const double dt, const Mesh &mesh, const int rank, const uint3
   free_err = cudaFree(device_cell_index_ptr);
   Insist(!free_err, "error freeing device_cell_index_ptr");
   #endif
+
+  std::free(photon_stream_nums);
+  std::free(photon_E);
+  std::free(photon_type)
+  std::free(photon_source_face);
+  std::free(photon_cell_index);
 }
 
 
