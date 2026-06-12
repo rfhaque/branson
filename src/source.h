@@ -333,9 +333,9 @@ void make_photons(const double dt, const Mesh &mesh, const int rank, const uint3
 
     // Copy photon arrays back to host photon array object
     // CPU -> CPU copies
-    std::copy( photon_E, photon_E+nphotons,  census_photons.E.begin() + n_census_photons);
-    std::copy(photon_E, photon_E+nphotons, census_photons.E0.begin() + n_census_photons);
-    std::copy( photon_type, photon_type+nphotons, census_photons.source_type.begin() + n_census_photons);
+    std::copy( photon_E, photon_E+n_photons,  census_photons.E.begin() + n_census_photons);
+    std::copy(photon_E, photon_E+n_photons, census_photons.E0.begin() + n_census_photons);
+    std::copy( photon_type, photon_type+n_photons, census_photons.source_type.begin() + n_census_photons);
     std::fill(census_photons.descriptors.begin() + n_census_photons, census_photons.descriptors.end(), Constants::event_type::BORN_SOURCE);
     // GPU -> CPU copies
     copy_err = cudaMemcpy(census_photons.cell_ID.data() + n_census_photons, device_cell_index_ptr, n_photons * sizeof(uint32_t), cudaMemcpyDeviceToHost);
@@ -368,10 +368,10 @@ void make_photons(const double dt, const Mesh &mesh, const int rank, const uint3
       n_photons, device_cell_index_ptr, device_rng_ptr, device_pos_ptr, device_angle_ptr,
       device_life_dx_ptr, device_group_ptr);
 
-    std::copy( photon_cell_index , photon_cell_index+nphotons, census_photons.cell_ID.begin() + n_census_photons);
-    std::copy( photon_E, photon_E+nphotons,  census_photons.E.begin() + n_census_photons);
-    std::copy(photon_E, photon_E+nphotons, census_photons.E0.begin() + n_census_photons);
-    std::copy( photon_type, photon_type+nphotons, census_photons.source_type.begin() + n_census_photons);
+    std::copy( photon_cell_index , photon_cell_index+n_photons, census_photons.cell_ID.begin() + n_census_photons);
+    std::copy( photon_E, photon_E+n_photons,  census_photons.E.begin() + n_census_photons);
+    std::copy(photon_E, photon_E+n_photons, census_photons.E0.begin() + n_census_photons);
+    std::copy( photon_type, photon_type+n_photons, census_photons.source_type.begin() + n_census_photons);
     std::fill(census_photons.descriptors.begin() + n_census_photons, census_photons.descriptors.end(), Constants::event_type::BORN_SOURCE);
   #endif
   }
