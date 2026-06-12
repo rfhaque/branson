@@ -267,13 +267,9 @@ private:
     }
 
     pointer data = static_cast<pointer>(raw);
-    size_type constructed = 0;
     try {
-      for (; constructed < count; ++constructed) {
-        ::new (static_cast<void *>(data + constructed)) T();
-      }
+      std::uninitialized_fill_n(data, count, T{});
     } catch (...) {
-      destroy_range(data, constructed);
       deallocate_storage(data);
       throw;
     }
@@ -290,7 +286,9 @@ private:
 
   static void *allocate_storage(const size_t bytes) {
 #ifdef USE_UMPIRE
-    return bransonHostAllocate(bytes);
+    void* data;
+    umpireHostMalloc(&data, bytes);
+    return data;
 #else
     return std::malloc(bytes);
 #endif
@@ -299,7 +297,7 @@ private:
   static void deallocate_storage(void *ptr) noexcept {
 #ifdef USE_UMPIRE
     if (ptr != nullptr) {
-      bransonHostDeallocate(ptr);
+      umpireHostFree(ptr);
     }
 #else
     std::free(ptr);
