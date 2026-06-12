@@ -37,6 +37,8 @@ public:
 
   MallocVector() = default;
 
+  explicit MallocVector(size_type count) { resize(count); }
+
   MallocVector(const MallocVector &other) { copy_from(other); }
 
   MallocVector(MallocVector &&other) noexcept { swap(other); }
