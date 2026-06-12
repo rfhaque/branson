@@ -352,9 +352,6 @@ public:
 
 
     // calculate new temperatures, update global conservation quantities
-#ifdef caliper_FOUND
-    CALI_MARK_BEGIN("update_temperature");
-#endif
     for (uint32_t i = 0; i < n_cell; ++i) {
       region_ID = cells[i].get_region_ID();
       region = regions[region_ID_to_index[region_ID]];
@@ -369,9 +366,6 @@ public:
       total_abs_E += abs_E[i];
       total_post_mat_E += T_new * cV * vol * rho;
     }
-#ifdef caliper_FOUND
-    CALI_MARK_END("update_temperature");
-#endif
 
     // verbose printing block
     if (verbose_print) {

@@ -37,8 +37,14 @@ void imc_particle_pass_driver(Mesh &mesh, IMC_State &imc_state,
                               const MPI_Types &mpi_types,
                               const Info &mpi_info) {
   using std::vector;
+#ifdef caliper_FOUND
+    CALI_MARK_BEGIN("vec_imc_particle_pass_driver");
+#endif
   vector<double> abs_E(mesh.get_n_local_cells(), 0.0);
   vector<double> track_E(mesh.get_n_local_cells(), 0.0);
+#ifdef caliper_FOUND
+    CALI_MARK_END("vec_imc_particle_pass_driver");
+#endif
   auto n_user_photons = imc_parameters.get_n_user_photons();
   Message_Counter mctr;
   const int rank = mpi_info.get_rank();
@@ -70,16 +76,10 @@ void imc_particle_pass_driver(Mesh &mesh, IMC_State &imc_state,
 
     make_photons<Census_T>(imc_state.get_dt(), mesh, rank, imc_state.get_step(), seed, n_user_photons, global_source_energy, gpu_setup);
     auto &all_photons = gpu_setup.get_census_photons();
-#ifdef caliper_FOUND
-    CALI_MARK_BEGIN("set_pre_census_E");
-#endif
     imc_state.set_pre_census_E(get_photon_list_census_E(all_photons));
-#ifdef caliper_FOUND
-    CALI_MARK_END("set_pre_census_E");
-#endif
-    t_source.stop_timer("source");
 
     MPI_Barrier(MPI_COMM_WORLD);
+    t_source.stop_timer("source");
     if (rank ==0)
       std::cout<<"source time: "<<t_source.get_time("source")<<std::endl;
 
