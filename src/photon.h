@@ -14,7 +14,7 @@
 
 #include <cmath>
 #include <iostream>
-#include <vector>
+#include "branson_vector.h"
 #include <array>
 
 #include "constants.h"

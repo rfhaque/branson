@@ -14,7 +14,6 @@
 
 #include <iostream>
 #include <unordered_map>
-#include <vector>
 
 #include "timer.h"
 #include "gpu_setup.h"
@@ -22,6 +21,7 @@
 #include "cell.h"
 #include "mesh.h"
 #include "photon.h"
+#include "branson_vector.h"
 #include "sampling_functions.h"
 
 GPU_KERNEL void make_source_photons( Cell  const * const cells,  const double dt, const uint32_t seed, uint64_t const * const photon_stream_numbers, double const * const photon_E, int const * const photon_type,  int const * const photon_source_face,  uint32_t const * const photon_cell_index, const uint64_t n_photons, Photon * const all_photons) {
@@ -127,11 +127,11 @@ void make_photons(const double dt, const Mesh &mesh, const int rank, const uint3
 #ifdef caliper_FOUND
     CALI_MARK_BEGIN("vec_make_photons");
 #endif
-  std::vector<uint64_t> photon_stream_nums(n_photons);
-  std::vector<double> photon_E(n_photons);
-  std::vector<int> photon_type(n_photons);
-  std::vector<int> photon_source_face(n_photons);
-  std::vector<uint32_t> photon_cell_index(n_photons);
+  branson::vector<uint64_t> photon_stream_nums(n_photons);
+  branson::vector<double> photon_E(n_photons);
+  branson::vector<int> photon_type(n_photons);
+  branson::vector<int> photon_source_face(n_photons);
+  branson::vector<uint32_t> photon_cell_index(n_photons);
 #ifdef caliper_FOUND
     CALI_MARK_END("vec_make_photons");
 #endif
@@ -232,7 +232,7 @@ void make_photons(const double dt, const Mesh &mesh, const int rank, const uint3
   // where Aos and SoA diverge--input data above is used for both, but AoS makes its array of
   // photons to be populated by GPU kernel now, SoA can use some of these input structs directly
 
-  if constexpr(std::is_same_v<Census_T, std::vector<Photon>>) {
+  if constexpr(std::is_same_v<Census_T, branson::vector<Photon>>) {
     #ifdef USE_GPU
     // Allocate photon data
     Photon *device_photon_ptr;
@@ -240,7 +240,7 @@ void make_photons(const double dt, const Mesh &mesh, const int rank, const uint3
     Insist(!alloc_err, "CUDA/HIP error allocating photons");
 
     #else
-    std::vector<Photon> &census_photons = gpu_setup.get_census_photons();
+    branson::vector<Photon> &census_photons = gpu_setup.get_census_photons();
     auto n_census_photons = census_photons.size();
     census_photons.resize(n_census_photons + n_photons);
     Photon *device_photon_ptr = census_photons.data() + n_census_photons;
@@ -257,7 +257,7 @@ void make_photons(const double dt, const Mesh &mesh, const int rank, const uint3
     auto sync_err = cudaDeviceSynchronize();
     Insist(!sync_err, "CUDA/HIP error synchronizing after source kernel");
 
-    std::vector<Photon> &census_photons = gpu_setup.get_census_photons();
+    branson::vector<Photon> &census_photons = gpu_setup.get_census_photons();
     auto n_census_photons = census_photons.size();
     census_photons.resize(n_census_photons + n_photons);
 

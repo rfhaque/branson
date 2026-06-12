@@ -13,7 +13,7 @@
 #include "../constants.h"
 #include "testing_functions.h"
 #include <iostream>
-#include <vector>
+#include "../branson_vector.h"
 
 int main(void) {
 
@@ -21,7 +21,7 @@ int main(void) {
   using Constants::dir_type;
   using std::cout;
   using std::endl;
-  using std::vector;
+  using branson::vector;
 
   int nfail = 0;
 

@@ -11,7 +11,7 @@
 
 #include <iostream>
 #include <string>
-#include <vector>
+#include "../branson_vector.h"
 
 #include "../decompose_mesh.h"
 #include "../mesh.h"
@@ -50,7 +50,7 @@ int main(int argc, char *argv[]) {
     bool silo_write_pass = true;
 
     // get fake vector of mesh requests
-    std::vector<uint32_t> n_requests(mesh.get_n_global_cells(), 0);
+    branson::vector<uint32_t> n_requests(mesh.get_n_global_cells(), 0);
 
     double time = 0.0;
     int step = 0;

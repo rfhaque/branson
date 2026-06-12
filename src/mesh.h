@@ -18,7 +18,7 @@
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
-#include <vector>
+#include "branson_vector.h"
 #include <iostream>
 #include <iomanip>
 
@@ -72,7 +72,7 @@ public:
     using Constants::Y_POS;
     using Constants::Z_NEG;
     using Constants::Z_POS;
-    using std::vector;
+    using branson::vector;
 
     Proto_Mesh proto_mesh(input, mpi_types, mpi_info);
 
@@ -102,7 +102,7 @@ public:
       std::cout << "Method/decomposition not recognized, exiting...";
       exit(EXIT_FAILURE);
     }
-    const std::vector<Proto_Cell> &proto_cell_list(proto_mesh.get_cell_list());
+    const branson::vector<Proto_Cell> &proto_cell_list(proto_mesh.get_cell_list());
 
     // this rank's cells
     n_cell = proto_cell_list.size();
@@ -209,13 +209,13 @@ public:
     return (index >= on_rank_start) && (index <= on_rank_end);
   }
 
-  const std::vector<Cell> &get_cells() const {
+  const branson::vector<Cell> &get_cells() const {
     return cells;
   }
 
-  std::vector<double> get_census_E(void) const { return m_census_E; }
-  std::vector<double> get_emission_E(void) const { return m_emission_E; }
-  std::vector<double> get_source_E(void) const { return m_source_E; }
+  branson::vector<double> get_census_E(void) const { return m_census_E; }
+  branson::vector<double> get_emission_E(void) const { return m_emission_E; }
+  branson::vector<double> get_source_E(void) const { return m_source_E; }
 
   //! Get the radiation temperature in a cell (for plotting/diagnostics)
   double get_T_r(const uint32_t cell_index) const { return T_r[cell_index]; }
@@ -324,8 +324,8 @@ public:
 
   //! Use the absorbed energy and update the material temperature of each
   // cell on the mesh. Set diagnostic and conservation values.
-  void update_temperature(std::vector<double> &abs_E,
-                          std::vector<double> &track_E, IMC_State &imc_state) {
+  void update_temperature(branson::vector<double> &abs_E,
+                          branson::vector<double> &track_E, IMC_State &imc_state) {
     using Constants::a;
     using Constants::c;
     using std::setiosflags;
@@ -447,18 +447,18 @@ public:
   }
 
   //! Get census energy vector needed to source particles
-  std::vector<double> &get_census_E_ref(void) { return m_census_E; }
+  branson::vector<double> &get_census_E_ref(void) { return m_census_E; }
 
   //! Get emission energy vector needed to source particles
-  std::vector<double> &get_emission_E_ref(void) { return m_emission_E; }
+  branson::vector<double> &get_emission_E_ref(void) { return m_emission_E; }
 
   //! Get external source energy vector needed to source particles
-  std::vector<double> &get_source_E_ref(void) { return m_source_E; }
+  branson::vector<double> &get_source_E_ref(void) { return m_source_E; }
 
-  std::vector<Cell>::iterator begin() {return cells.begin();}
-  std::vector<Cell>::iterator end() {return cells.end();}
-  std::vector<Cell>::const_iterator begin() const {return cells.cbegin();}
-  std::vector<Cell>::const_iterator end() const {return cells.cend();}
+  branson::vector<Cell>::iterator begin() {return cells.begin();}
+  branson::vector<Cell>::iterator end() {return cells.end();}
+  branson::vector<Cell>::const_iterator begin() const {return cells.cbegin();}
+  branson::vector<Cell>::const_iterator end() const {return cells.cend();}
 
   //--------------------------------------------------------------------------//
   // member variables
@@ -482,18 +482,18 @@ private:
   double total_photon_E;   //!< Total photon energy on the mesh
   double replicated_factor;   //!< Factor to reduce emission and initial census in replicated mode
 
-  std::vector<Region> regions; //!< Vector of regions in the problem
+  branson::vector<Region> regions; //!< Vector of regions in the problem
 
   uint32_t n_cell; //!< Number of local cells
 
-  std::vector<double> m_census_E;   //!< Census energy vector
-  std::vector<double> m_emission_E; //!< Emission energy vector
-  std::vector<double> m_source_E;   //!< Source energy vector
-  std::vector<double> T_r;          //!< Diagnostic quantity
+  branson::vector<double> m_census_E;   //!< Census energy vector
+  branson::vector<double> m_emission_E; //!< Emission energy vector
+  branson::vector<double> m_source_E;   //!< Source energy vector
+  branson::vector<double> T_r;          //!< Diagnostic quantity
 
-  std::vector<Cell> cells; //!< Cell data allocated with MPI_Alloc
+  branson::vector<Cell> cells; //!< Cell data allocated with MPI_Alloc
 
-  std::vector<uint32_t> off_rank_bounds;    //!< Ending value of global ID for each rank
+  branson::vector<uint32_t> off_rank_bounds;    //!< Ending value of global ID for each rank
   uint32_t on_rank_start; //!< Start of global index on rank
   uint32_t on_rank_end;   //!< End of global index on rank
 

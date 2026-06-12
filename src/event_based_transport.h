@@ -11,7 +11,7 @@
 #ifndef event_based_transport_h_
 #define event_based_transport_h_
 
-#include <vector>
+#include "branson_vector.h"
 #include <algorithm>
 #include <cmath>
 #include <numeric>
@@ -58,7 +58,7 @@ struct PhotonTrackingData {
   bool exited_vacuum;
 };
 
-void save_tracking_data(const std::vector<PhotonTrackingData>& tracking_data,
+void save_tracking_data(const branson::vector<PhotonTrackingData>& tracking_data,
   const std::string& filename) {
   std::ofstream outfile(filename);
   outfile << "initial_angle_x,final_angle_x,time_in_cell,num_interactions,exited_vacuum\n";
@@ -82,11 +82,11 @@ inline void precompute_data(const uint32_t rank_cell_offset,
   const Cell* cells,
   const size_t* active_photons,
   size_t active_count,
-  std::vector<double>& sigma_s,
-  std::vector<double>& sigma_a,
-  std::vector<double>& f,
-  std::vector<double>& total_sigma_s,
-  std::vector<uint32_t>& local_cell_indices) {
+  branson::vector<double>& sigma_s,
+  branson::vector<double>& sigma_a,
+  branson::vector<double>& f,
+  branson::vector<double>& total_sigma_s,
+  branson::vector<uint32_t>& local_cell_indices) {
 #pragma omp simd
   for (size_t i = 0; i < active_count; ++i) {
     size_t photon_index = active_photons[i];
@@ -103,9 +103,9 @@ inline void calculate_distances(PhotonArray& photon_array,
   const Cell* cells,
   const size_t* active_photons,
   size_t active_count,
-  const std::vector<double>& total_sigma_s,
-  const std::vector<uint32_t>& local_cell_indices,
-  std::vector<Event>& events) {
+  const branson::vector<double>& total_sigma_s,
+  const branson::vector<uint32_t>& local_cell_indices,
+  branson::vector<Event>& events) {
 #pragma omp simd
   for (size_t i = 0; i < active_count; ++i) {
     size_t photon_index = active_photons[i];
@@ -140,7 +140,7 @@ inline void get_subset_local_indices(const PhotonArray& photon_array,
                                      const size_t* subset_photon_indices,
                                      size_t subset_count,
                                      uint32_t rank_cell_offset,
-                                     std::vector<uint32_t>& subset_local_indices) {
+                                     branson::vector<uint32_t>& subset_local_indices) {
     subset_local_indices.resize(subset_count);
     #pragma omp simd
     for (size_t i = 0; i < subset_count; ++i) {
@@ -151,14 +151,14 @@ inline void get_subset_local_indices(const PhotonArray& photon_array,
 
 
 inline void process_scatter_events(PhotonArray& photon_array,
-  const std::vector<double>& sigma_s,
-  const std::vector<double>& total_sigma_s,
-  const std::vector<uint32_t>& local_cell_indices,
+  const branson::vector<double>& sigma_s,
+  const branson::vector<double>& total_sigma_s,
+  const branson::vector<uint32_t>& local_cell_indices,
   const Cell* cells,
   const size_t* scatter_photon_indices,
   size_t scatter_count,
-  const std::vector<EmissionGroupData>& emission_groups,
-  std::vector<PhotonTrackingData>& tracking_data) // Tracking data only for CPU
+  const branson::vector<EmissionGroupData>& emission_groups,
+  branson::vector<PhotonTrackingData>& tracking_data) // Tracking data only for CPU
 {
 #pragma omp simd
   for (size_t i = 0; i < scatter_count; ++i) {
@@ -189,7 +189,7 @@ inline void process_boundary_events(PhotonArray& photon_array,
   const Cell* cells,
   uint32_t rank_cell_offset,
   size_t boundary_count,
-  std::vector<PhotonTrackingData>& tracking_data) { // Tracking data only for CPU
+  branson::vector<PhotonTrackingData>& tracking_data) { // Tracking data only for CPU
 #pragma omp simd
   for (size_t i = 0; i < boundary_count; ++i) {
     size_t photon_index = boundary_photon_indices[i];
@@ -238,20 +238,20 @@ inline void process_census_events(PhotonArray& photon_array,
 
 inline void update_photon_state(PhotonArray& photon_array,
   Cell_Tally* cell_tallies,
-  const std::vector<Event>& events, // Contains distance and type for active photons
-  const std::vector<double>& sigma_a, // Corresponds to active photons
-  const std::vector<double>& f,       // Corresponds to active photons
-  const std::vector<uint32_t>& local_cell_indices, // Corresponds to active photons
+  const branson::vector<Event>& events, // Contains distance and type for active photons
+  const branson::vector<double>& sigma_a, // Corresponds to active photons
+  const branson::vector<double>& f,       // Corresponds to active photons
+  const branson::vector<uint32_t>& local_cell_indices, // Corresponds to active photons
   size_t active_count,
-  std::vector<size_t>& scatter_indices, // Output: indices of photons that will scatter
-  std::vector<size_t>& boundary_indices,// Output: indices of photons that will hit boundary
-  std::vector<size_t>& census_indices,  // Output: indices of photons that will hit census
-  std::vector<size_t>& killed_indices,  // Output: indices of photons that were killed
+  branson::vector<size_t>& scatter_indices, // Output: indices of photons that will scatter
+  branson::vector<size_t>& boundary_indices,// Output: indices of photons that will hit boundary
+  branson::vector<size_t>& census_indices,  // Output: indices of photons that will hit census
+  branson::vector<size_t>& killed_indices,  // Output: indices of photons that were killed
   size_t& scatter_count,                // Output count
   size_t& boundary_count,               // Output count
   size_t& census_count,                 // Output count
   size_t& killed_count,                 // Output count
-  std::vector<PhotonTrackingData>& tracking_data) // Tracking data only for CPU
+  branson::vector<PhotonTrackingData>& tracking_data) // Tracking data only for CPU
 {
   // Reset counts
   scatter_count = 0;
@@ -259,7 +259,7 @@ inline void update_photon_state(PhotonArray& photon_array,
   census_count = 0;
   killed_count = 0;
 
-  std::vector<double> absorbed_Es(active_count);
+  branson::vector<double> absorbed_Es(active_count);
 #pragma omp simd
   for (size_t i = 0; i < active_count; ++i) {
     double distance = events[i].distance;
@@ -330,15 +330,15 @@ inline void update_photon_state(PhotonArray& photon_array,
 
 // CPU Main loop for SoA
 void cpu_event_transport_photons(const uint32_t rank_cell_offset,
-  PhotonArray& photon_array, const std::vector<Cell>& cells, std::vector<Cell_Tally>& cell_tallies,
+  PhotonArray& photon_array, const branson::vector<Cell>& cells, branson::vector<Cell_Tally>& cell_tallies,
   int n_omp_threads, // n_omp_threads currently unused in this fine-grained version
-  const std::vector<EmissionGroupData>& emission_groups)
+  const branson::vector<EmissionGroupData>& emission_groups)
 {
   const size_t maxPhotons = photon_array.size();
   if (maxPhotons == 0) return;
 
   // Tracking data is specific to this CPU implementation
-  std::vector<PhotonTrackingData> tracking_data(maxPhotons);
+  branson::vector<PhotonTrackingData> tracking_data(maxPhotons);
   for (size_t i = 0; i < maxPhotons; ++i) {
     tracking_data[i].initial_angle_x = photon_array.angle[i][0];
     tracking_data[i].final_angle_x = photon_array.angle[i][0];
@@ -349,15 +349,15 @@ void cpu_event_transport_photons(const uint32_t rank_cell_offset,
   }
 
   // Allocate vectors for event processing
-  std::vector<size_t> scatter_indices(maxPhotons),
+  branson::vector<size_t> scatter_indices(maxPhotons),
     boundary_indices(maxPhotons),
     census_indices(maxPhotons),
     killed_indices(maxPhotons),
     active_photons_indices(maxPhotons); // Stores original indices of active photons
 
-  std::vector<Event> events(maxPhotons); // Stores event info for active photons
-  std::vector<uint32_t> local_cell_indices(maxPhotons); // Stores local cell index for active photons
-  std::vector<double> sigma_s(maxPhotons), sigma_a(maxPhotons), f(maxPhotons),
+  branson::vector<Event> events(maxPhotons); // Stores event info for active photons
+  branson::vector<uint32_t> local_cell_indices(maxPhotons); // Stores local cell index for active photons
+  branson::vector<double> sigma_s(maxPhotons), sigma_a(maxPhotons), f(maxPhotons),
     total_sigma_s(maxPhotons);
 
   // Initialize active photons list with original indices 0 to N-1
@@ -410,14 +410,14 @@ void cpu_event_transport_photons(const uint32_t rank_cell_offset,
     // 4. Process events using the filled index vectors and counts
 
     if (scatter_count > 0) {
-        std::vector<double> scatter_sigma_s(scatter_count);
-        std::vector<double> scatter_total_sigma_s(scatter_count);
-        std::vector<uint32_t> scatter_local_indices(scatter_count);
-        std::vector<double> subset_sigma_s(scatter_count);
-        std::vector<double> subset_total_sigma_s(scatter_count);
-        std::vector<uint32_t> subset_local_indices(scatter_count);
+        branson::vector<double> scatter_sigma_s(scatter_count);
+        branson::vector<double> scatter_total_sigma_s(scatter_count);
+        branson::vector<uint32_t> scatter_local_indices(scatter_count);
+        branson::vector<double> subset_sigma_s(scatter_count);
+        branson::vector<double> subset_total_sigma_s(scatter_count);
+        branson::vector<uint32_t> subset_local_indices(scatter_count);
         // Find the mapping
-        std::vector<size_t> active_to_subset_map(maxPhotons, maxPhotons); // Map original index to position in active list
+        branson::vector<size_t> active_to_subset_map(maxPhotons, maxPhotons); // Map original index to position in active list
         for(size_t i=0; i<active_count; ++i) active_to_subset_map[active_photons_indices[i]] = i;
 
         for(size_t i=0; i<scatter_count; ++i) {
@@ -445,7 +445,7 @@ void cpu_event_transport_photons(const uint32_t rank_cell_offset,
 
     // 5. Filter active photons for the next iteration
     // Create the next list of active photon indices
-    std::vector<size_t> next_active_photons_indices;
+    branson::vector<size_t> next_active_photons_indices;
     next_active_photons_indices.reserve(active_count); // Reserve space
 
     for (size_t i = 0; i < active_count; ++i) {
@@ -471,11 +471,11 @@ void cpu_event_transport_photons(const uint32_t rank_cell_offset,
 
 
 //----------------------------------------------------------------------------//
-// CPU Event-Based Transport - AoS (std::vector<Photon>)                      //
+// CPU Event-Based Transport - AoS (branson::vector<Photon>)                      //
 //----------------------------------------------------------------------------//
 
 // Precompute data for AOS (Array of Structures)
-inline void precompute_data(const uint32_t rank_cell_offset, const std::vector<Photon>& photon_array, const Cell* cells, const size_t* active_photons, size_t active_count, std::vector<double>& sigma_s, std::vector<double>& sigma_a, std::vector<double>& f, std::vector<double>& total_sigma_s, std::vector<uint32_t>& local_cell_indices) {
+inline void precompute_data(const uint32_t rank_cell_offset, const branson::vector<Photon>& photon_array, const Cell* cells, const size_t* active_photons, size_t active_count, branson::vector<double>& sigma_s, branson::vector<double>& sigma_a, branson::vector<double>& f, branson::vector<double>& total_sigma_s, branson::vector<uint32_t>& local_cell_indices) {
 #pragma omp simd
   for (size_t i = 0; i < active_count; ++i) {
     size_t photon_index = active_photons[i];
@@ -490,7 +490,7 @@ inline void precompute_data(const uint32_t rank_cell_offset, const std::vector<P
 }
 
 // Calculate distances for AOS
-inline void calculate_distances(std::vector<Photon>& photon_array, const Cell* cells, const size_t* active_photons, size_t active_count, const std::vector<double>& total_sigma_s, const std::vector<uint32_t>& local_cell_indices, std::vector<Event>& events) {
+inline void calculate_distances(branson::vector<Photon>& photon_array, const Cell* cells, const size_t* active_photons, size_t active_count, const branson::vector<double>& total_sigma_s, const branson::vector<uint32_t>& local_cell_indices, branson::vector<Event>& events) {
 #pragma omp simd
   for (size_t i = 0; i < active_count; ++i) {
     size_t photon_index = active_photons[i];
@@ -514,15 +514,15 @@ inline void calculate_distances(std::vector<Photon>& photon_array, const Cell* c
 }
 
 // Process scatter events for AOS
-inline void process_scatter_events(std::vector<Photon>& photon_array,
-    const std::vector<double>& sigma_s,
-    const std::vector<double>& total_sigma_s,
-    const std::vector<uint32_t>& local_cell_indices,
+inline void process_scatter_events(branson::vector<Photon>& photon_array,
+    const branson::vector<double>& sigma_s,
+    const branson::vector<double>& total_sigma_s,
+    const branson::vector<uint32_t>& local_cell_indices,
     const Cell* cells,
     const size_t* scatter_indices,
     size_t scatter_count,
-    const std::vector<EmissionGroupData>& emission_groups,
-    std::vector<PhotonTrackingData>& tracking_data)
+    const branson::vector<EmissionGroupData>& emission_groups,
+    branson::vector<PhotonTrackingData>& tracking_data)
 {
 #pragma omp simd
   for (size_t i = 0; i < scatter_count; ++i) {
@@ -550,12 +550,12 @@ inline void process_scatter_events(std::vector<Photon>& photon_array,
 }
 
 // Process boundary events for AOS
-inline void process_boundary_events(std::vector<Photon>& photon_array,
+inline void process_boundary_events(branson::vector<Photon>& photon_array,
 const size_t* boundary_indices, // Original indices
 const Cell* cells,
 uint32_t rank_cell_offset,
 size_t boundary_count,
-std::vector<PhotonTrackingData>& tracking_data)
+branson::vector<PhotonTrackingData>& tracking_data)
 {
 #pragma omp simd
 for (size_t i = 0; i < boundary_count; ++i) {
@@ -589,7 +589,7 @@ else { // REFLECT
 }
 
 // Process census events for AOS
-inline void process_census_events(std::vector<Photon>& photon_array,
+inline void process_census_events(branson::vector<Photon>& photon_array,
 const size_t* census_indices, // Original indices
 size_t census_count)
 {
@@ -600,19 +600,19 @@ photon_array[census_indices[i]].set_descriptor(Constants::CENSUS); // Inactive
 }
 
 // Update photon state for AOS
-inline void update_photon_state(std::vector<Photon>& photon_array,
+inline void update_photon_state(branson::vector<Photon>& photon_array,
 Cell_Tally* cell_tallies,
-const std::vector<Event>& events, // Corresponds to active photons
-const std::vector<double>& sigma_a, // Corresponds to active photons
-const std::vector<double>& f, // Corresponds to active photons
-const std::vector<uint32_t>& local_cell_indices, // Corresponds to active photons
+const branson::vector<Event>& events, // Corresponds to active photons
+const branson::vector<double>& sigma_a, // Corresponds to active photons
+const branson::vector<double>& f, // Corresponds to active photons
+const branson::vector<uint32_t>& local_cell_indices, // Corresponds to active photons
 size_t active_count,
-std::vector<size_t>& scatter_indices, // Output list of original indices
-std::vector<size_t>& boundary_indices,// Output list of original indices
-std::vector<size_t>& census_indices,  // Output list of original indices
-std::vector<size_t>& killed_indices,  // Output list of original indices
+branson::vector<size_t>& scatter_indices, // Output list of original indices
+branson::vector<size_t>& boundary_indices,// Output list of original indices
+branson::vector<size_t>& census_indices,  // Output list of original indices
+branson::vector<size_t>& killed_indices,  // Output list of original indices
 size_t& scatter_count, size_t& boundary_count, size_t& census_count, size_t& killed_count, // Output counts
-std::vector<PhotonTrackingData>& tracking_data)
+branson::vector<PhotonTrackingData>& tracking_data)
 {
 // Reset counts
 scatter_count = 0;
@@ -620,7 +620,7 @@ boundary_count = 0;
   census_count = 0;
   killed_count = 0;
 
-  std::vector<double> absorbed_Es(active_count);
+  branson::vector<double> absorbed_Es(active_count);
 #pragma omp simd
   for (size_t i = 0; i < active_count; ++i) {
     size_t photon_idx = events[i].photon_index;
@@ -683,13 +683,13 @@ boundary_count = 0;
 }
 
 // Main CPU event transport function for AOS
-void cpu_event_transport_photons(const uint32_t rank_cell_offset, std::vector<Photon>& photon_array, const std::vector<Cell>& cells, std::vector<Cell_Tally>& cell_tallies, int n_omp_threads, const std::vector<EmissionGroupData>& emission_groups) {
+void cpu_event_transport_photons(const uint32_t rank_cell_offset, branson::vector<Photon>& photon_array, const branson::vector<Cell>& cells, branson::vector<Cell_Tally>& cell_tallies, int n_omp_threads, const branson::vector<EmissionGroupData>& emission_groups) {
 
   const size_t maxPhotons = photon_array.size();
    if (maxPhotons == 0) return;
 
   // Tracking data specific to CPU implementation
-  std::vector<PhotonTrackingData> tracking_data(maxPhotons);
+  branson::vector<PhotonTrackingData> tracking_data(maxPhotons);
    for (size_t i = 0; i < maxPhotons; ++i) {
     tracking_data[i].initial_angle_x = photon_array[i].get_angle()[0];
     tracking_data[i].final_angle_x = photon_array[i].get_angle()[0]; // Initialize
@@ -699,10 +699,10 @@ void cpu_event_transport_photons(const uint32_t rank_cell_offset, std::vector<Ph
     tracking_data[i].exited_vacuum = false;
   }
 
-  std::vector<size_t> scatter_indices(maxPhotons), boundary_indices(maxPhotons), census_indices(maxPhotons), killed_indices(maxPhotons), active_photons_indices(maxPhotons);
-  std::vector<Event> events(maxPhotons);
-  std::vector<uint32_t> local_cell_indices(maxPhotons);
-  std::vector<double> sigma_s(maxPhotons), sigma_a(maxPhotons), f(maxPhotons), total_sigma_s(maxPhotons);
+  branson::vector<size_t> scatter_indices(maxPhotons), boundary_indices(maxPhotons), census_indices(maxPhotons), killed_indices(maxPhotons), active_photons_indices(maxPhotons);
+  branson::vector<Event> events(maxPhotons);
+  branson::vector<uint32_t> local_cell_indices(maxPhotons);
+  branson::vector<double> sigma_s(maxPhotons), sigma_a(maxPhotons), f(maxPhotons), total_sigma_s(maxPhotons);
 
   std::iota(active_photons_indices.begin(), active_photons_indices.end(), 0);
   size_t active_count = maxPhotons;
@@ -737,10 +737,10 @@ void cpu_event_transport_photons(const uint32_t rank_cell_offset, std::vector<Ph
     // 4. Process events
     if (scatter_count > 0) {
         // Rebuild subset physics data for scatter events
-        std::vector<double> subset_sigma_s(scatter_count);
-        std::vector<double> subset_total_sigma_s(scatter_count);
-        std::vector<uint32_t> subset_local_indices(scatter_count);
-        std::vector<size_t> active_to_subset_map(maxPhotons, maxPhotons);
+        branson::vector<double> subset_sigma_s(scatter_count);
+        branson::vector<double> subset_total_sigma_s(scatter_count);
+        branson::vector<uint32_t> subset_local_indices(scatter_count);
+        branson::vector<size_t> active_to_subset_map(maxPhotons, maxPhotons);
         for(size_t i=0; i<active_count; ++i) active_to_subset_map[active_photons_indices[i]] = i;
         for(size_t i=0; i<scatter_count; ++i) {
             size_t original_index = scatter_indices[i];
@@ -761,7 +761,7 @@ void cpu_event_transport_photons(const uint32_t rank_cell_offset, std::vector<Ph
     }
 
     // 5. Compact active list
-    std::vector<size_t> next_active_photons_indices;
+    branson::vector<size_t> next_active_photons_indices;
     next_active_photons_indices.reserve(active_count);
     for (size_t i = 0; i < active_count; ++i) {
         size_t index = active_photons_indices[i];
@@ -1122,8 +1122,8 @@ GPU_KERNEL void compact_active_list_kernel_soa(
 //----------------------------------------------------------------------------//
 void gpu_event_transport_photons(const uint32_t rank_cell_offset,
     PhotonArray &cpu_photons, const Cell *device_cells_ptr,
-    std::vector<Cell_Tally> &cpu_cell_tallies,
-    const std::vector<EmissionGroupData>& emission_groups) // Pass host emission data
+    branson::vector<Cell_Tally> &cpu_cell_tallies,
+    const branson::vector<EmissionGroupData>& emission_groups) // Pass host emission data
 {
   Timer t_transport;
   t_transport.start_timer("soa_gpu_event_transport_photons");
@@ -1215,10 +1215,10 @@ void gpu_event_transport_photons(const uint32_t rank_cell_offset,
   err = cudaMemcpy(d_rng, cpu_photons.rng.data(), n_photons * sizeof(RNG), cudaMemcpyHostToDevice); Insist(!err, "SoA GPU copy failed: rng");
   err = cudaMemcpy(d_cell_tallies, cpu_cell_tallies.data(), n_cells * sizeof(Cell_Tally), cudaMemcpyHostToDevice); Insist(!err, "SoA GPU copy failed: cell_tallies");
   err = cudaMemcpy(d_emission_groups, emission_groups.data(), n_emission_groups * sizeof(EmissionGroupData), cudaMemcpyHostToDevice); Insist(!err, "SoA GPU copy failed: emission_groups");
-  std::vector<uint32_t> h_initial_indices(n_photons);
+  branson::vector<uint32_t> h_initial_indices(n_photons);
   std::iota(h_initial_indices.begin(), h_initial_indices.end(), 0);
   err = cudaMemcpy(d_active_indices_1, h_initial_indices.data(), sizeof(uint32_t) * n_photons, cudaMemcpyHostToDevice); Insist(!err, "GPU SoA Memcpy H2D: d_active_indices_1");
-  std::vector<unsigned int> h_zero_counters(NUM_EVENT_TYPES, 0);
+  branson::vector<unsigned int> h_zero_counters(NUM_EVENT_TYPES, 0);
   err = cudaMemcpy(d_event_counters, h_zero_counters.data(), sizeof(unsigned int) * NUM_EVENT_TYPES, cudaMemcpyHostToDevice); Insist(!err, "GPU SoA Memcpy H2D: d_event_counters");
 
 
@@ -1631,9 +1631,9 @@ __global__ void compact_active_list_kernel_aos(
 // GPU Transport Function (AoS) - Event Based                                 //
 //----------------------------------------------------------------------------//
 void gpu_event_transport_photons(const uint32_t rank_cell_offset,
-    std::vector<Photon> &cpu_photons, const Cell *device_cells_ptr,
-    std::vector<Cell_Tally> &cpu_cell_tallies,
-    const std::vector<EmissionGroupData>& emission_groups)
+    branson::vector<Photon> &cpu_photons, const Cell *device_cells_ptr,
+    branson::vector<Cell_Tally> &cpu_cell_tallies,
+    const branson::vector<EmissionGroupData>& emission_groups)
 {
   Timer t_transport;
   t_transport.start_timer("aos_gpu_event_transport_photons");
@@ -1674,7 +1674,7 @@ void gpu_event_transport_photons(const uint32_t rank_cell_offset,
   err = cudaMemcpy(d_emission_groups, emission_groups.data(), sizeof(EmissionGroupData) * n_emission_groups, cudaMemcpyHostToDevice); Insist(!err, "GPU AoS Memcpy H2D: d_emission_groups");
 
   // Active Indices (initialize with 0, 1, ..., n_photons-1 on host first)
-  std::vector<uint32_t> h_initial_indices(n_photons);
+  branson::vector<uint32_t> h_initial_indices(n_photons);
   std::iota(h_initial_indices.begin(), h_initial_indices.end(), 0);
   err = cudaMalloc((void **)&d_active_indices_1, sizeof(uint32_t) * n_photons); Insist(!err, "GPU AoS Malloc: d_active_indices_1");
   err = cudaMalloc((void **)&d_active_indices_2, sizeof(uint32_t) * n_photons); Insist(!err, "GPU AoS Malloc: d_active_indices_2");
@@ -1688,7 +1688,7 @@ void gpu_event_transport_photons(const uint32_t rank_cell_offset,
 
   // Event Counters (host init to 0, then copy)
   const int NUM_EVENT_TYPES = 4; // Scatter, Boundary, Census, Kill
-  std::vector<unsigned int> h_zero_counters(NUM_EVENT_TYPES, 0);
+  branson::vector<unsigned int> h_zero_counters(NUM_EVENT_TYPES, 0);
   err = cudaMalloc((void **)&d_event_counters, sizeof(unsigned int) * NUM_EVENT_TYPES); Insist(!err, "GPU AoS Malloc: d_event_counters");
   err = cudaMemcpy(d_event_counters, h_zero_counters.data(), sizeof(unsigned int) * NUM_EVENT_TYPES, cudaMemcpyHostToDevice); Insist(!err, "GPU AoS Memcpy H2D: d_event_counters");
   err = cudaMalloc((void **)&d_next_active_count_atomic, sizeof(unsigned int)); Insist(!err, "GPU AoS Malloc: d_next_active_count_atomic");
@@ -1742,7 +1742,7 @@ void gpu_event_transport_photons(const uint32_t rank_cell_offset,
     err = cudaGetLastError(); Insist(!err, "GPU AoS Kernel Launch Error: partition_photons");
 
     // 5. Get event counts (copy counters back to host)
-    std::vector<unsigned int> h_event_counts(NUM_EVENT_TYPES);
+    branson::vector<unsigned int> h_event_counts(NUM_EVENT_TYPES);
     err = cudaMemcpy(h_event_counts.data(), d_event_counters, sizeof(unsigned int) * NUM_EVENT_TYPES, cudaMemcpyDeviceToHost);
     Insist(!err, "GPU AoS Memcpy D2H Error: d_event_counters");
     uint32_t scatter_count = h_event_counts[0];

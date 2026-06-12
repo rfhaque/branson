@@ -11,7 +11,7 @@
 
 #include <iostream>
 #include <mpi.h>
-#include <vector>
+#include "../branson_vector.h"
 
 #include "../buffer.h"
 
@@ -19,7 +19,7 @@ int main(void) {
 
   using std::cout;
   using std::endl;
-  using std::vector;
+  using branson::vector;
 
   int nfail = 0;
 

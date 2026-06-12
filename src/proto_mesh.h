@@ -18,7 +18,7 @@
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
-#include <vector>
+#include "branson_vector.h"
 
 #include "buffer.h"
 #include "constants.h"
@@ -60,7 +60,7 @@ public:
     using Constants::Y_POS;
     using Constants::Z_NEG;
     using Constants::Z_POS;
-    using std::vector;
+    using branson::vector;
 
     double dx, dy, dz;
 
@@ -234,7 +234,7 @@ public:
     return adjacent_procs;
   }
 
-  std::vector<uint32_t> get_off_rank_bounds(void) { return off_rank_bounds; }
+  branson::vector<uint32_t> get_off_rank_bounds(void) { return off_rank_bounds; }
 
   void print(void) const {
     for (uint32_t i = 0; i < n_cell; i++)
@@ -296,7 +296,7 @@ public:
   }
 
   //! Gets contant reference to cell vector before it's deleted
-  const std::vector<Proto_Cell> &get_pre_window_allocation_cells() const {
+  const branson::vector<Proto_Cell> &get_pre_window_allocation_cells() const {
     return cell_list;
   }
 
@@ -361,7 +361,7 @@ public:
   }
 
   //! set the global starting indices for all ranks
-  void set_off_rank_bounds(std::vector<uint32_t> _off_rank_bounds) {
+  void set_off_rank_bounds(branson::vector<uint32_t> _off_rank_bounds) {
     off_rank_bounds = _off_rank_bounds;
   }
 
@@ -408,8 +408,8 @@ public:
   }
 
   //! Remove old mesh cells after decomposition and communication of new cells
-  void set_post_decomposition_mesh_cells(const std::vector<int> &partition) {
-    using std::vector;
+  void set_post_decomposition_mesh_cells(const branson::vector<int> &partition) {
+    using branson::vector;
     vector<Proto_Cell> new_mesh;
 
     // all cells that were assigned to this rank are still part of the mesh
@@ -436,7 +436,7 @@ public:
     new_cell_list.push_back(new_cell);
   }
 
-  const std::vector<Proto_Cell> &get_cell_list(void) const { return cell_list; }
+  const branson::vector<Proto_Cell> &get_cell_list(void) const { return cell_list; }
 
   //--------------------------------------------------------------------------//
   // member variables
@@ -460,16 +460,16 @@ private:
   uint32_t on_rank_start; //!< Start of global index on rank
   uint32_t on_rank_end;   //!< End of global index on rank
 
-  std::vector<Proto_Cell> cell_list;      //!< On processor proto-cells
-  std::vector<Proto_Cell> new_cell_list;  //!< New received proto-cells
-  std::vector<uint32_t> remove_cell_list; //!< Cells to be removed
-  std::vector<uint32_t>
+  branson::vector<Proto_Cell> cell_list;      //!< On processor proto-cells
+  branson::vector<Proto_Cell> new_cell_list;  //!< New received proto-cells
+  branson::vector<uint32_t> remove_cell_list; //!< Cells to be removed
+  branson::vector<uint32_t>
       off_rank_bounds; //!< Ending value of global indices for each rank
 
   std::unordered_map<uint32_t, uint32_t>
       adjacent_procs; //!< List of adjacent processors
 
-  std::vector<Region> regions; //!< Vector of regions in the problem
+  branson::vector<Region> regions; //!< Vector of regions in the problem
   std::unordered_map<uint32_t, uint32_t>
       region_ID_to_index; //!< Maps region ID to index
 };

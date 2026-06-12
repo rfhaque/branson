@@ -15,7 +15,7 @@
 #include <functional>
 #include <iostream>
 #include <mpi.h>
-#include <vector>
+#include "branson_vector.h"
 
 #include "config.h"
 #include "census_functions.h"
@@ -36,7 +36,7 @@ template <typename Census_T>
 void imc_replicated_driver(Mesh &mesh, IMC_State &imc_state,
                            const IMC_Parameters &imc_parameters,
                            const MPI_Types &mpi_types, const Info &mpi_info) {
-  using std::vector;
+  using branson::vector;
   vector<double> abs_E(mesh.get_n_global_cells(), 0.0);
   vector<double> track_E(mesh.get_n_global_cells(), 0.0);
   Census_T census_photons;

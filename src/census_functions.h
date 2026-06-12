@@ -20,7 +20,7 @@
 template <typename Census_T>
 void join_photon_arrays(Census_T &original, Census_T &to_append) {
 
-  if constexpr(std::is_same_v<Census_T, std::vector<Photon>>) {
+  if constexpr(std::is_same_v<Census_T, branson::vector<Photon>>) {
     original.insert(original.end(), to_append.begin(), to_append.end());
   }
   else {
@@ -37,7 +37,7 @@ double get_photon_list_E(const PhotonArray &photon_array) {
   return total_E;
 }
 
-double get_photon_list_E(const std::vector<Photon> &photons) {
+double get_photon_list_E(const branson::vector<Photon> &photons) {
   double total_E = 0.0;
   for (auto const &iphtn : photons) {
     total_E += iphtn.get_E();
@@ -56,7 +56,7 @@ double get_photon_list_census_E(const PhotonArray &photon_array) {
   return total_E;
 }
 
-double get_photon_list_census_E(const std::vector<Photon> &photons) {
+double get_photon_list_census_E(const branson::vector<Photon> &photons) {
   double total_E = 0.0;
   for (auto const &iphtn : photons) {
     total_E += (iphtn.get_source_type() == 0) ? iphtn.get_E() : 0.0;
@@ -68,19 +68,19 @@ void remove_inactive_photons(PhotonArray &photons) {
   photons.remove_inactive_particles();
 }
 
-void remove_inactive_photons(std::vector<Photon> &photons) {
+void remove_inactive_photons(branson::vector<Photon> &photons) {
   auto new_end = std::remove_if(photons.begin(), photons.end(), [] (const Photon &iphoton) {
     return iphoton.get_descriptor() != Constants::CENSUS;});
   photons.erase(new_end, photons.end());
 }
 
-void comb_photons(std::vector<Photon> &census_photons,
+void comb_photons(branson::vector<Photon> &census_photons,
                   int64_t max_census_photons, RNG *rng) {
   std::unordered_map<uint32_t, uint32_t> cell_census_count;
   std::unordered_map<uint32_t, double> cell_census_E;
   std::unordered_map<uint32_t, double> cell_corrected_E;
 
-  std::vector<Photon> post_comb_photons;
+  branson::vector<Photon> post_comb_photons;
 
   double census_total_E = get_photon_list_E(census_photons);
   double global_census_E = census_total_E;

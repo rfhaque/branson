@@ -11,17 +11,16 @@
 #ifndef gpu_setup_h_
 #define gpu_setup_h_
 
-#include <vector>
-
 #include "cell.h"
 #include "config.h"
+#include "branson_vector.h"
 
 template <typename Census_T>
 class GPU_Setup {
 
 public:
   //! Constructor
-  GPU_Setup(const int rank, const int n_ranks, const bool use_gpu_transporter, const std::vector<Cell> &cpu_cells, uint64_t n_user_photons)
+  GPU_Setup(const int rank, const int n_ranks, const bool use_gpu_transporter, const branson::vector<Cell> &cpu_cells, uint64_t n_user_photons)
     : m_use_gpu_transporter(use_gpu_transporter), device_cells_ptr(nullptr)
   {
 #ifdef USE_GPU
@@ -38,7 +37,7 @@ public:
       Insist(!err, "CUDA/HIP error in copying cells data");
     }
 #endif
-    if constexpr (std::is_same_v<Census_T, std::vector<Photon>>) {
+    if constexpr (std::is_same_v<Census_T, branson::vector<Photon>>) {
       census_photons.reserve(n_user_photons);
     } else {
       census_photons.cell_ID.reserve(n_user_photons);

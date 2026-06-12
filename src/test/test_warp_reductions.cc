@@ -1,4 +1,4 @@
-#include <vector>
+#include "../branson_vector.h"
 #include <algorithm>
 #include <set>
 #include <stdlib.h>
@@ -27,7 +27,7 @@ __global__ void test_warp_atomic_inc_kernel(
 
 // allocate and copy helper
 template<typename T>
-inline T* allocAndCopy(std::vector<T>& host_data) {
+inline T* allocAndCopy(branson::vector<T>& host_data) {
   T* device_ptr;
   size_t size = host_data.size() * sizeof(T);
   auto err = cudaMalloc((void **)&device_ptr, size);
@@ -39,8 +39,8 @@ inline T* allocAndCopy(std::vector<T>& host_data) {
 
 // copy back and free helper
 template<typename T>
-inline std::vector<T> copyBackAndFree(T* device_ptr, size_t count) {
-  std::vector<T> host_data(count);
+inline branson::vector<T> copyBackAndFree(T* device_ptr, size_t count) {
+  branson::vector<T> host_data(count);
   size_t size = count * sizeof(T);
   auto err = cudaMemcpy(host_data.data(), device_ptr, size, cudaMemcpyDeviceToHost);
   Insist(!err, "error in copy");
@@ -55,9 +55,9 @@ int test_inc_ballot_all_true() {
   int n_fail = 0;
 
   // Setup predicates (all true)
-  std::vector<unsigned char> predicates(n_threads, 1);
-  std::vector<unsigned char> results(n_threads, 0);
-  std::vector<unsigned int> positions(n_threads, 0);
+  branson::vector<unsigned char> predicates(n_threads, 1);
+  branson::vector<unsigned char> results(n_threads, 0);
+  branson::vector<unsigned int> positions(n_threads, 0);
 
   std::cout<<"alloc"<<std::endl;
   unsigned int* d_counter;
@@ -148,4 +148,3 @@ int main(int argc, char *argv[]) {
 
   return n_fail;
 }
-

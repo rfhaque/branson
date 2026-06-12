@@ -17,8 +17,8 @@ batch_transport(const double next_dt, const bool gpu_available, const GPU_Setup<
                 const IMC_Parameters &imc_parameters,
                 const uint32_t rank_cell_offset, const Mesh &mesh,
                 Census_T &all_photons,
-                std::vector<std::vector<Photon>> &phtn_send_buffer,
-                std::vector<Cell_Tally> &cell_tallies, Timer &t_transport) {
+                branson::vector<branson::vector<Photon>> &phtn_send_buffer,
+                branson::vector<Cell_Tally> &cell_tallies, Timer &t_transport) {
   auto transport_algorithm = imc_parameters.get_transport_algorithm();
   auto n_omp_threads = imc_parameters.get_n_omp_threads();
   uint64_t n_complete = 0;
@@ -31,7 +31,7 @@ batch_transport(const double next_dt, const bool gpu_available, const GPU_Setup<
     // HISTORY: GPU
     if (gpu_setup.use_gpu_transporter() && gpu_available) {
 #ifdef USE_GPU
-      if constexpr (std::is_same_v<Census_T, std::vector<Photon>>) {
+      if constexpr (std::is_same_v<Census_T, branson::vector<Photon>>) {
         gpu_transport_photons(rank_cell_offset, all_photons, gpu_setup.get_device_cells_ptr(),
                               cell_tallies);
       } else {
@@ -56,7 +56,7 @@ batch_transport(const double next_dt, const bool gpu_available, const GPU_Setup<
   else if (transport_algorithm == Constants::EVENT) {
     algorithm = "event";
     // Precompute emission group data for event-based transport (both CPU and GPU)
-    std::vector<EmissionGroupData> emission_groups;
+    branson::vector<EmissionGroupData> emission_groups;
     if (transport_algorithm == Constants::EVENT) {
       emission_groups.resize(mesh.get_n_local_cells());
       for (size_t i = 0; i < mesh.get_n_local_cells(); ++i) {
@@ -88,9 +88,9 @@ batch_transport(const double next_dt, const bool gpu_available, const GPU_Setup<
       for (size_t batch_start = 0; batch_start < all_photons.size();
            batch_start += event_batch_size) {
         size_t batch_end = std::min(batch_start + event_batch_size, all_photons.size());
-        if constexpr (std::is_same_v<Census_T, std::vector<Photon>>) {
+        if constexpr (std::is_same_v<Census_T, branson::vector<Photon>>) {
           // Create a sub-vector for the batch (requires copy)
-          std::vector<Photon> batch_photons(all_photons.begin() + batch_start,
+          branson::vector<Photon> batch_photons(all_photons.begin() + batch_start,
                                             all_photons.begin() + batch_end);
           cpu_event_transport_photons(rank_cell_offset, batch_photons, mesh.get_cells(),
                                       cell_tallies, n_omp_threads, emission_groups);
@@ -123,7 +123,7 @@ batch_transport(const double next_dt, const bool gpu_available, const GPU_Setup<
   }   // EVENT
   t_transport.stop_timer("batch transport");
   /*
-  if constexpr (std::is_same_v<Census_T, std::vector<Photon>>) {
+  if constexpr (std::is_same_v<Census_T, branson::vector<Photon>>) {
     std::cout << hardware << ", " << algorithm << ", AoS, transport--particles: " << n_complete
          << " time: " << t_transport.get_time("batch transport") << std::endl;
   } else {

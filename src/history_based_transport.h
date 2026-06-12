@@ -16,7 +16,7 @@
 #include <iostream>
 #include <numeric>
 #include <unordered_map>
-#include <vector>
+#include "branson_vector.h"
 
 #include "config.h"
 #include "RNG.h"
@@ -594,14 +594,14 @@ void transport_photon_history_soa_gpu(const uint32_t rank_cell_offset,
 
 //! Transport photons using history-based method on CPU (AoS version)
 void history_cpu_transport_photons(const uint32_t rank_cell_offset,
-    std::vector<Photon> &photons, const std::vector<Cell> &cells, std::vector<Cell_Tally> &cell_tallies, int n_omp_threads) {
+    branson::vector<Photon> &photons, const branson::vector<Cell> &cells, branson::vector<Cell_Tally> &cell_tallies, int n_omp_threads) {
 
   auto cpu_cells_ptr{cells.data()};
   auto cpu_tallies_ptr{cell_tallies.data()};
   const auto n_cells = cell_tallies.size();
 
 #ifdef USE_OPENMP
-  std::vector<std::vector<Cell_Tally>> thread_tallies(n_omp_threads);
+  branson::vector<branson::vector<Cell_Tally>> thread_tallies(n_omp_threads);
 #pragma omp parallel num_threads(n_omp_threads)
   {
     int tid = omp_get_thread_num();
@@ -630,7 +630,7 @@ void history_cpu_transport_photons(const uint32_t rank_cell_offset,
 
 //! Transport photons using history-based method on CPU (SoA version)
 void history_cpu_transport_photons(const uint32_t rank_cell_offset,
-    PhotonArray &photons, const std::vector<Cell> &cells, std::vector<Cell_Tally> &cell_tallies, int n_omp_threads) {
+    PhotonArray &photons, const branson::vector<Cell> &cells, branson::vector<Cell_Tally> &cell_tallies, int n_omp_threads) {
 
   auto cpu_cells_ptr{cells.data()};
   auto cpu_tallies_ptr{cell_tallies.data()};
@@ -638,7 +638,7 @@ void history_cpu_transport_photons(const uint32_t rank_cell_offset,
   const size_t n_photons = photons.size();
 
 #ifdef USE_OPENMP
-  std::vector<std::vector<Cell_Tally>> thread_tallies(n_omp_threads);
+  branson::vector<branson::vector<Cell_Tally>> thread_tallies(n_omp_threads);
 #pragma omp parallel num_threads(n_omp_threads)
   {
     int tid = omp_get_thread_num();
@@ -708,7 +708,7 @@ void gpu_history_transport_soa_kernel(const uint32_t rank_cell_offset,
 
 //! Transport photons using history-based method on GPU (AoS version)
 void gpu_transport_photons(const uint32_t rank_cell_offset,
-    std::vector<Photon> &cpu_photons, const Cell *device_cells_ptr, std::vector<Cell_Tally> &cpu_cell_tallies) {
+    branson::vector<Photon> &cpu_photons, const Cell *device_cells_ptr, branson::vector<Cell_Tally> &cpu_cell_tallies) {
 
 #ifdef USE_GPU
   Timer t_transport;
@@ -772,7 +772,7 @@ void gpu_transport_photons(const uint32_t rank_cell_offset,
   { n_omp_threads = omp_get_num_threads(); }
 #endif
   // Need the host cells vector if running on CPU
-  std::vector<Cell> host_cells; // Placeholder - needs actual data if fallback is used
+  branson::vector<Cell> host_cells; // Placeholder - needs actual data if fallback is used
   history_cpu_transport_photons(rank_cell_offset, cpu_photons, host_cells, cpu_cell_tallies, n_omp_threads);
 #endif
 }
@@ -780,7 +780,7 @@ void gpu_transport_photons(const uint32_t rank_cell_offset,
 
 //! Transport photons using history-based method on GPU (SoA version)
 void gpu_transport_photons(const uint32_t rank_cell_offset,
-    PhotonArray &cpu_photons, const Cell *device_cells_ptr, std::vector<Cell_Tally> &cpu_cell_tallies) {
+    PhotonArray &cpu_photons, const Cell *device_cells_ptr, branson::vector<Cell_Tally> &cpu_cell_tallies) {
 
 #ifdef USE_GPU
   Timer t_transport;
@@ -924,7 +924,7 @@ void gpu_transport_photons(const uint32_t rank_cell_offset,
   { n_omp_threads = omp_get_num_threads(); }
 #endif
   // Need the host cells vector if running on CPU
-  std::vector<Cell> host_cells; // Placeholder - needs actual data if fallback is used
+  branson::vector<Cell> host_cells; // Placeholder - needs actual data if fallback is used
   history_cpu_transport_photons(rank_cell_offset, cpu_photons, host_cells, cpu_cell_tallies, n_omp_threads);
 #endif
 }

@@ -16,7 +16,7 @@
 #include <iomanip>
 #include <sstream>
 #include <string>
-#include <vector>
+#include "branson_vector.h"
 
 #ifdef VIZ_LIBRARIES_FOUND
 #include <silo.h>
@@ -41,7 +41,7 @@ void write_silo(const Mesh &mesh, const double &arg_time, const uint32_t &step,
   using std::array;
   using std::string;
   using std::stringstream;
-  using std::vector;
+  using branson::vector;
 
   // need a non-const double to pass to SILO
   double time = arg_time;

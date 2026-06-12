@@ -13,7 +13,7 @@
 #define buffer_h_
 
 #include <mpi.h>
-#include <vector>
+#include "branson_vector.h"
 #include <cstdint>
 
 template <class T> class Buffer {
@@ -26,7 +26,7 @@ public:
   ~Buffer() {}
 
   //! Fill the underlying buffer data with input vector
-  void fill(std::vector<T> _object) {
+  void fill(branson::vector<T> _object) {
     object = _object;
     status = READY;
   }
@@ -40,10 +40,10 @@ public:
   }
 
   //! Return const reference to buffer's vector object
-  const std::vector<T> &get_object(void) const { return object; }
+  const branson::vector<T> &get_object(void) const { return object; }
 
   //! Return reference to buffer's vector object
-  std::vector<T> &get_object_ref(void) { return object; }
+  branson::vector<T> &get_object_ref(void) { return object; }
 
   //! Resize internal buffer vector
   void resize(uint32_t new_size) { object.resize(new_size); }
@@ -82,7 +82,7 @@ public:
   bool empty(void) const { return status == EMPTY; }
 
   //! Return the grip IDs that were received by this buffer
-  const std::vector<uint32_t> &get_grip_IDs(void) const { return grip_IDs; }
+  const branson::vector<uint32_t> &get_grip_IDs(void) const { return grip_IDs; }
 
   //! Return the single grip ID of the buffer in CELL_PASS_RMA mode
   uint32_t get_grip_ID(void) const { return grip_IDs[0]; }
@@ -95,11 +95,11 @@ public:
 
   //! Set the single grip ID associated with the buffer (CELL_PASS_RMA mode)
   void set_grip_ID(const uint32_t _grip_ID) {
-    grip_IDs = std::vector<uint32_t>(1, _grip_ID);
+    grip_IDs = branson::vector<uint32_t>(1, _grip_ID);
   }
 
   //! Set the multiple grip IDs assocaited with this buffer (CELL_PASS mode)
-  void set_grip_IDs(std::vector<uint32_t> _grip_IDs) { grip_IDs = _grip_IDs; }
+  void set_grip_IDs(branson::vector<uint32_t> _grip_IDs) { grip_IDs = _grip_IDs; }
 
   //! Set the rank which the buffer is sending to or receiving from
   void set_rank(uint32_t _rank) { rank = _rank; }
@@ -117,9 +117,9 @@ private:
   int32_t rank;
 
   //! Grips received or sent, used for convenience in mesh passing
-  std::vector<uint32_t> grip_IDs;
+  branson::vector<uint32_t> grip_IDs;
 
-  std::vector<T> object; //!< Where sent/received data is stored
+  branson::vector<T> object; //!< Where sent/received data is stored
 
   //! Buffer statuses, used in completion routine
   enum { EMPTY, READY, SENT, AWAITING, RECEIVED };

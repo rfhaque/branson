@@ -11,7 +11,7 @@
 
 #include <iostream>
 #include <string>
-#include <vector>
+#include "../branson_vector.h"
 
 #include "../constants.h"
 #include "../input.h"

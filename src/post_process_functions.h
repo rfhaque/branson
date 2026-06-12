@@ -16,7 +16,7 @@
 #include <iostream>
 #include <numeric>
 #include <unordered_map>
-#include <vector>
+#include "branson_vector.h"
 
 #include "config.h"
 #include "RNG.h"
@@ -27,10 +27,10 @@
 
 
 template <typename Census_T>
-std::tuple<uint64_t, double, double> post_process_photons(const double next_dt, Census_T &all_photons, const Mesh &mesh, std::vector<std::vector<Photon>> &send_list);
+std::tuple<uint64_t, double, double> post_process_photons(const double next_dt, Census_T &all_photons, const Mesh &mesh, branson::vector<branson::vector<Photon>> &send_list);
 
 template <>
-std::tuple<uint64_t, double, double> post_process_photons<std::vector<Photon>>(const double next_dt, std::vector<Photon> &all_photons, const Mesh &mesh, std::vector<std::vector<Photon>> &send_list) {
+std::tuple<uint64_t, double, double> post_process_photons<branson::vector<Photon>>(const double next_dt, branson::vector<Photon> &all_photons, const Mesh &mesh, branson::vector<branson::vector<Photon>> &send_list) {
   uint64_t n_complete = 0;
   double census_E{0.0};
   double exit_E{0.0};
@@ -63,7 +63,7 @@ std::tuple<uint64_t, double, double> post_process_photons<std::vector<Photon>>(c
 }
 
 template <>
-std::tuple<uint64_t, double, double>  post_process_photons<PhotonArray>(const double next_dt, PhotonArray &all_photons, const Mesh &mesh, std::vector<std::vector<Photon>> &send_list) {
+std::tuple<uint64_t, double, double>  post_process_photons<PhotonArray>(const double next_dt, PhotonArray &all_photons, const Mesh &mesh, branson::vector<branson::vector<Photon>> &send_list) {
   uint64_t n_complete = 0.0;
   double census_E{0.0};
   double exit_E{0.0};

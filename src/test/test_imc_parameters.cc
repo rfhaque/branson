@@ -11,7 +11,7 @@
 
 #include <iostream>
 #include <string>
-#include <vector>
+#include "../branson_vector.h"
 
 #include "../constants.h"
 #include "../input.h"
@@ -84,4 +84,3 @@ int main(int argc, char *argv[]) {
 //---------------------------------------------------------------------------//
 // end of test_imc_parameters.cc
 //---------------------------------------------------------------------------//
-

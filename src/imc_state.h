@@ -16,7 +16,7 @@
 #include <functional>
 #include <iostream>
 #include <mpi.h>
-#include <vector>
+#include "branson_vector.h"
 
 #include "RNG.h"
 #include "constants.h"

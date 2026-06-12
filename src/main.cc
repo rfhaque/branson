@@ -13,7 +13,7 @@
 #include <string>
 #include <sys/time.h>
 #include <time.h>
-#include <vector>
+#include "branson_vector.h"
 
 #include "config.h"
 #include "constants.h"
@@ -34,7 +34,7 @@ using Constants::AOS;
 using std::cout;
 using std::endl;
 using std::string;
-using std::vector;
+using branson::vector;
 
 int main(int argc, char **argv) {
   MPI_Init(&argc, &argv);
@@ -120,7 +120,7 @@ int main(int argc, char **argv) {
     if (input.get_dd_mode() == PARTICLE_PASS) {
       if( input.get_particle_storage() == AOS) {
         timers.start_timer("particle pass aos");
-        imc_particle_pass_driver<std::vector<Photon>>(mesh, imc_state, imc_p, mpi_types, mpi_info);
+        imc_particle_pass_driver<branson::vector<Photon>>(mesh, imc_state, imc_p, mpi_types, mpi_info);
         timers.stop_timer("particle pass aos");
       }
       else if(input.get_particle_storage() == SOA) {
@@ -136,7 +136,7 @@ int main(int argc, char **argv) {
     else if (input.get_dd_mode() == REPLICATED) {
       if(input.get_particle_storage() == AOS) {
         timers.start_timer("replicated aos");
-        imc_replicated_driver<std::vector<Photon>>(mesh, imc_state, imc_p, mpi_types, mpi_info);
+        imc_replicated_driver<branson::vector<Photon>>(mesh, imc_state, imc_p, mpi_types, mpi_info);
         timers.stop_timer("replicated aos");
       }
       else if( input.get_particle_storage() == SOA) {

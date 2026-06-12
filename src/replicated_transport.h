@@ -6,7 +6,7 @@
 #include <iostream>
 #include <mpi.h>
 #include <numeric>
-#include <vector>
+#include "branson_vector.h"
 #include <type_traits> // Required for std::is_same_v
 
 #include "config.h"
@@ -35,7 +35,7 @@ void print_memory_footprint(const T& particle_container, const std::string& cont
       return;
   }
 
-  if constexpr (std::is_same_v<T, std::vector<Photon>>) {
+  if constexpr (std::is_same_v<T, branson::vector<Photon>>) {
     // AoS memory calculation
     total_bytes = num_particles * sizeof(Photon); // Simpler calculation using sizeof class
   }
@@ -68,21 +68,21 @@ void print_memory_footprint(const T& particle_container, const std::string& cont
 
 template <typename Census_T>
 void replicated_transport(const Mesh& mesh, const GPU_Setup<Census_T>& gpu_setup, IMC_State& imc_state,
-  std::vector<double>& rank_abs_E, std::vector<double>& rank_track_E, Census_T& all_photons,
+  branson::vector<double>& rank_abs_E, branson::vector<double>& rank_track_E, Census_T& all_photons,
   const IMC_Parameters &imc_parameters) {
   using std::cout;
   using std::endl;
-  using std::vector;
+  using branson::vector;
 
   // Print total memory footprint information
   //cout << "\n=== Total Particle Memory Usage ===" << endl;
-  //print_memory_footprint(all_photons, std::is_same_v<Census_T, std::vector<Photon>> ? "AoS (vector<Photon>)" : "SoA (PhotonArray)");
+  //print_memory_footprint(all_photons, std::is_same_v<Census_T, branson::vector<Photon>> ? "AoS (vector<Photon>)" : "SoA (PhotonArray)");
 
   // Print theoretical batch memory calculation once at the start (for CPU event-based)
   if (imc_parameters.get_transport_algorithm() == Constants::EVENT) {
       auto event_batch_size = imc_parameters.get_event_batch_size();
       size_t batch_memory = 0;
-      if constexpr (std::is_same_v<Census_T, std::vector<Photon>>) {
+      if constexpr (std::is_same_v<Census_T, branson::vector<Photon>>) {
         batch_memory = event_batch_size * sizeof(Photon);
         cout << "\n=== AoS CPU Event Batch Memory Estimate ===" << endl;
       }
@@ -138,7 +138,7 @@ void replicated_transport(const Mesh& mesh, const GPU_Setup<Census_T>& gpu_setup
 
   vector<Cell_Tally> cell_tallies(mesh.get_n_local_cells()); // Initialize tallies (zeroed)
   uint32_t rank_cell_offset{ 0 }; // no offset in replicated mesh
-  std::vector<std::vector<Photon>> null_send_list(0); // not used in replicated mode
+  branson::vector<branson::vector<Photon>> null_send_list(0); // not used in replicated mode
 
   auto [batch_complete, batch_exit_E, batch_census_E] = batch_transport(next_dt, gpu_available, gpu_setup, imc_parameters, rank_cell_offset, mesh, all_photons, null_send_list, cell_tallies, t_transport);
   auto n_complete = batch_complete;

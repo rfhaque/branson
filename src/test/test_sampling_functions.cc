@@ -11,7 +11,7 @@
 
 #include <iostream>
 #include <mpi.h>
-#include <vector>
+#include "../branson_vector.h"
 
 #include "testing_functions.h"
 #include "../sampling_functions.h"
@@ -22,7 +22,7 @@ int main(void) {
 
   using std::cout;
   using std::endl;
-  using std::vector;
+  using branson::vector;
 
   int nfail = 0;
   constexpr uint64_t seed = 777U;
@@ -165,4 +165,3 @@ int main(void) {
 //---------------------------------------------------------------------------//
 // end of test_sampling_functions.cc
 //---------------------------------------------------------------------------//
-

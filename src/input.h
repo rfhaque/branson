@@ -67,7 +67,7 @@ public:
 
     using std::cout;
     using std::endl;
-    using std::vector;
+    using branson::vector;
 
     // root rank reads file, prints warnings, and broadcasts to others
     int rank;
@@ -887,7 +887,7 @@ public:
   uint32_t get_n_regions() const { return regions.size(); }
 
   //! Return vector of regions
-  const std::vector<Region> &get_regions() const { return regions; }
+  const branson::vector<Region> &get_regions() const { return regions; }
 
   //! Return region given user set ID
   const Region &get_region(const uint32_t region_ID) const {
@@ -922,7 +922,7 @@ private:
   double dtMax;   //!< Maximum timestep size
 
   // material
-  std::vector<Region> regions; //!< Vector of regions in the problem
+  branson::vector<Region> regions; //!< Vector of regions in the problem
 
   //! Maps unique key to user set ID for a region
   std::map<uint32_t, uint32_t> region_map;
@@ -968,15 +968,15 @@ private:
 
   // detailed mesh specifications
   uint32_t n_divisions;            //!< Number of divisions in the mesh
-  std::vector<double> x_start;     //!< x starting positions for each division
-  std::vector<double> x_end;       //!< x ending positions for each division
-  std::vector<double> y_start;     //!< y starting positions for each division
-  std::vector<double> y_end;       //!< y ending positions for each division
-  std::vector<double> z_start;     //!< z starting positions for each division
-  std::vector<double> z_end;       //!< z ending positions for each division
-  std::vector<uint32_t> n_x_cells; //!< Number of x cells in each division
-  std::vector<uint32_t> n_y_cells; //!< Number of y cells in each division
-  std::vector<uint32_t> n_z_cells; //!< Number of z cells in each division
+  branson::vector<double> x_start;     //!< x starting positions for each division
+  branson::vector<double> x_end;       //!< x ending positions for each division
+  branson::vector<double> y_start;     //!< y starting positions for each division
+  branson::vector<double> y_end;       //!< y ending positions for each division
+  branson::vector<double> z_start;     //!< z starting positions for each division
+  branson::vector<double> z_end;       //!< z ending positions for each division
+  branson::vector<uint32_t> n_x_cells; //!< Number of x cells in each division
+  branson::vector<uint32_t> n_y_cells; //!< Number of y cells in each division
+  branson::vector<uint32_t> n_z_cells; //!< Number of z cells in each division
   uint32_t n_global_x_cells; //!< Total number of x cells over all divisions
   uint32_t n_global_y_cells; //!< Total number of y cells over all divisions
   uint32_t n_global_z_cells; //!< Total number of z cells over all divisions

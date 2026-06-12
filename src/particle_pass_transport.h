@@ -17,7 +17,7 @@
 #include <iostream>
 #include <mpi.h>
 #include <numeric>
-#include <vector>
+#include "branson_vector.h"
 
 #include "config.h"
 #include "post_process_functions.h"
@@ -36,8 +36,8 @@
 template <typename Census_T>
 void particle_pass_transport(
     const Mesh &mesh, const GPU_Setup<Census_T> &gpu_setup, const IMC_Parameters &imc_parameters, const Info &mpi_info, const MPI_Types &mpi_types,
-    IMC_State &imc_state, Message_Counter &mctr, std::vector<double> &rank_abs_E, std::vector<double> &rank_track_E, Census_T &all_photons) {
-  using std::vector;
+    IMC_State &imc_state, Message_Counter &mctr, branson::vector<double> &rank_abs_E, branson::vector<double> &rank_track_E, Census_T &all_photons) {
+  using branson::vector;
 
   // is the GPU even available?
   #ifdef USE_GPU
@@ -162,9 +162,9 @@ void particle_pass_transport(
         if (batch_end == all_photons.size()) {
           local_work_done = true;
         }
-        if constexpr (std::is_same_v<Census_T, std::vector<Photon>>) {
+        if constexpr (std::is_same_v<Census_T, branson::vector<Photon>>) {
           // Create a sub-vector for the batch (requires copy)
-          std::vector<Photon> batch_photons(all_photons.begin() + batch_start,
+          branson::vector<Photon> batch_photons(all_photons.begin() + batch_start,
                                             all_photons.begin() + batch_end);
           auto [batch_complete, batch_exit_E, batch_census_E] = batch_transport(next_dt, gpu_available, gpu_setup, imc_parameters, rank_cell_offset, mesh, batch_photons, send_list, cell_tallies, t_transport);
           // copy batch back into all_photons

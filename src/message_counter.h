@@ -12,7 +12,7 @@
 #ifndef message_counter_h_
 #define message_counter_h_
 
-#include <vector>
+#include "branson_vector.h"
 
 struct Message_Counter {
 

@@ -19,7 +19,7 @@
 #include <unistd.h>
 #include <unordered_map>
 #include <unordered_set>
-#include <vector>
+#include "branson_vector.h"
 
 #include "config.h"
 #include "buffer.h"
@@ -55,7 +55,7 @@ void print_MPI_out(const Proto_Mesh &mesh, const uint32_t rank,
 //----------------------------------------------------------------------------//
 //! partition a mesh with metis
 #ifdef METIS_FOUND
-std::vector<int> metis_partition(Proto_Mesh &mesh, int &edgecut, const int rank,
+branson::vector<int> metis_partition(Proto_Mesh &mesh, int &edgecut, const int rank,
                                  const int n_rank, const MPI_Types &mpi_types) {
 
   using Constants::X_NEG;
@@ -64,7 +64,7 @@ std::vector<int> metis_partition(Proto_Mesh &mesh, int &edgecut, const int rank,
   using Constants::Y_POS;
   using Constants::Z_NEG;
   using Constants::Z_POS;
-  using std::vector;
+  using branson::vector;
 
   MPI_Comm comm;
   MPI_Comm_dup(MPI_COMM_WORLD, &comm);
@@ -89,11 +89,11 @@ std::vector<int> metis_partition(Proto_Mesh &mesh, int &edgecut, const int rank,
   uint32_t n_global_cells = vtxdist.back();
 
   // return partition of each cell on rank
-  std::vector<int> part(ncell_on_rank);
+  branson::vector<int> part(ncell_on_rank);
 
   // non-root ranks gather send cells to root
   if (rank != 0) {
-    const std::vector<Proto_Cell> send_cells =
+    const branson::vector<Proto_Cell> send_cells =
         mesh.get_pre_window_allocation_cells();
     MPI_Send(send_cells.data(), ncell_on_rank, MPI_Proto_Cell, 0, cell_tag,
              MPI_COMM_WORLD);
@@ -103,8 +103,8 @@ std::vector<int> metis_partition(Proto_Mesh &mesh, int &edgecut, const int rank,
   }
   // root rank gathers all cells and uses METIS to setup partitions
   else {
-    std::vector<Proto_Cell> all_cells(n_global_cells);
-    const std::vector<Proto_Cell> send_cells =
+    branson::vector<Proto_Cell> all_cells(n_global_cells);
+    const branson::vector<Proto_Cell> send_cells =
         mesh.get_pre_window_allocation_cells();
     std::copy(send_cells.begin(), send_cells.end(), all_cells.begin());
     for (int irank = 1; irank < n_rank; ++irank) {
@@ -168,7 +168,7 @@ std::vector<int> metis_partition(Proto_Mesh &mesh, int &edgecut, const int rank,
 
     int signed_n_global_cells = n_global_cells;
 
-    std::vector<int> global_part(n_global_cells);
+    branson::vector<int> global_part(n_global_cells);
 
     int metis_return = METIS_PartGraphKway(
         &signed_n_global_cells, // number of on-rank vertices
@@ -215,7 +215,7 @@ std::vector<int> metis_partition(Proto_Mesh &mesh, int &edgecut, const int rank,
 //----------------------------------------------------------------------------//
 
 //----------------------------------------------------------------------------//
-std::vector<int> cube_partition(Proto_Mesh &mesh, const int rank,
+branson::vector<int> cube_partition(Proto_Mesh &mesh, const int rank,
                                 const int n_rank) {
 
   uint32_t nx = mesh.get_global_n_x();
@@ -243,7 +243,7 @@ std::vector<int> cube_partition(Proto_Mesh &mesh, const int rank,
   }
 
   uint32_t ncell_on_rank = mesh.get_n_local_cells();
-  std::vector<int> part(ncell_on_rank, rank);
+  branson::vector<int> part(ncell_on_rank, rank);
   std::unordered_set<int> acceptor_ranks;
 
   for (uint32_t i = 0; i < ncell_on_rank; ++i) {
@@ -269,8 +269,8 @@ std::vector<int> cube_partition(Proto_Mesh &mesh, const int rank,
 void exchange_cells_post_partitioning(const int rank,
                                       const MPI_Types &mpi_types,
                                       Proto_Mesh &mesh,
-                                      const std::vector<int> &part) {
-  using std::vector;
+                                      const branson::vector<int> &part) {
+  using branson::vector;
   MPI_Datatype MPI_Proto_Cell = mpi_types.get_proto_cell_type();
   uint32_t ncell_on_rank = mesh.get_n_local_cells();
 
@@ -377,7 +377,7 @@ void remap_cell_and_grip_indices_rma(Proto_Mesh &mesh, const int rank,
                                      const int n_rank) {
   using std::unordered_map;
   using std::unordered_set;
-  using std::vector;
+  using branson::vector;
   if (rank == 0)
     std::cout << "remapping with rma..." << std::endl;
 
@@ -447,9 +447,9 @@ void remap_cell_and_grip_indices_rma(Proto_Mesh &mesh, const int rank,
   MPI_Win_sync(index_win);
   MPI_Barrier(MPI_COMM_WORLD);
 
-  std::vector<uint32_t> new_boundary_indices(boundary_indices.size());
-  std::vector<MPI_Request> i_reqs(boundary_indices.size());
-  std::vector<MPI_Request> g_reqs(boundary_indices.size());
+  branson::vector<uint32_t> new_boundary_indices(boundary_indices.size());
+  branson::vector<MPI_Request> i_reqs(boundary_indices.size());
+  branson::vector<MPI_Request> g_reqs(boundary_indices.size());
 
   int ib = 0;
   for (auto &iset : boundary_indices) {
@@ -496,7 +496,7 @@ void remap_cell_and_grip_indices_allreduce(Proto_Mesh &mesh, const int rank,
                                            const int n_rank) {
   using std::unordered_map;
   using std::unordered_set;
-  using std::vector;
+  using branson::vector;
 
   if (rank == 0)
     std::cout << "remapping with allreduce..." << std::endl;
@@ -608,7 +608,7 @@ void decompose_mesh(Proto_Mesh &mesh, const MPI_Types &mpi_types,
   t_partition.start_timer("partition");
 
   // decomposition methods return a partition vector which is the rank of each cell
-  std::vector<int> part;
+  branson::vector<int> part;
   if (decomposition_type == CUBE) {
     part = cube_partition(mesh, rank, n_rank);
     edgecut = 1;
@@ -623,12 +623,12 @@ void decompose_mesh(Proto_Mesh &mesh, const MPI_Types &mpi_types,
         std::cout<<"Using initial decomposition (\"bacon strip\" in 2D, \"hamburger patty\" in";
         std::cout<<" 3D), may not be contiguous"<<std::endl;
       }
-      part = std::vector<int>(mesh.get_n_local_cells(), rank);
+      part = branson::vector<int>(mesh.get_n_local_cells(), rank);
       edgecut = 0;
 #endif
     }
     else {
-      part = std::vector<int>(mesh.get_n_local_cells(), 0);
+      part = branson::vector<int>(mesh.get_n_local_cells(), 0);
       edgecut = 0;
     }
   } else {
@@ -674,7 +674,7 @@ void replicate_mesh(Proto_Mesh &mesh, const MPI_Types &mpi_types,
   using std::partial_sum;
   using std::unordered_map;
   using std::unordered_set;
-  using std::vector;
+  using branson::vector;
 
   int rank = mpi_info.get_rank();
   int n_rank = mpi_info.get_n_rank();
@@ -751,7 +751,7 @@ void replicate_mesh(Proto_Mesh &mesh, const MPI_Types &mpi_types,
 
   // update the cell list on each processor (use an identity mapped partition
   // vector)
-  std::vector<int> part(ncell_on_rank, rank);
+  branson::vector<int> part(ncell_on_rank, rank);
   mesh.set_post_decomposition_mesh_cells(part);
 
   // gather the number of cells on each processor

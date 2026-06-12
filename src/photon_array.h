@@ -14,28 +14,29 @@
 
 #include <cmath>
 #include <iostream>
-#include <vector>
 #include <array>
 #include <stdexcept> // For std::out_of_range
+#include <algorithm>
 
 #include "constants.h"
 #include "config.h"
 #include "RNG.h"
+#include "branson_vector.h"
 #include "photon.h" // Include Photon definition for push_back
 
 // Structure of arrays to store photon attributes
 class PhotonArray {
 public:
-  std::vector<uint32_t> cell_ID;
-  std::vector<uint32_t> group;
-  std::vector<uint32_t> source_type; // CENSUS, EMISSION, SOURCE (as uint32_t)
-  std::vector<unsigned char> descriptors; // Event type (as uchar)
-  std::vector<std::array<double, 3>> pos;
-  std::vector<std::array<double, 3>> angle;
-  std::vector<double> E;
-  std::vector<double> E0;
-  std::vector<double> life_dx;
-  std::vector<RNG> rng;
+  branson::vector<uint32_t> cell_ID;
+  branson::vector<uint32_t> group;
+  branson::vector<uint32_t> source_type; // CENSUS, EMISSION, SOURCE (as uint32_t)
+  branson::vector<unsigned char> descriptors; // Event type (as uchar)
+  branson::vector<std::array<double, 3>> pos;
+  branson::vector<std::array<double, 3>> angle;
+  branson::vector<double> E;
+  branson::vector<double> E0;
+  branson::vector<double> life_dx;
+  branson::vector<RNG> rng;
 
   // Add a photon from a Photon object (AoS -> SoA)
   void push_back(const Photon& photon) {

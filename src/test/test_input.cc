@@ -11,7 +11,7 @@
 
 #include <iostream>
 #include <string>
-#include <vector>
+#include "../branson_vector.h"
 
 #include "../constants.h"
 #include "../input.h"
@@ -114,7 +114,7 @@ int main(int argc, char *argv[]) {
 
       // test region functionality
       uint32_t region_index = input.get_region_index(0, 0, 0);
-      std::vector<Region> regions = input.get_regions();
+      branson::vector<Region> regions = input.get_regions();
       Region region = regions[region_index];
 
       if (input.get_n_regions() != 1)
@@ -246,7 +246,7 @@ int main(int argc, char *argv[]) {
       // test region functionality
       uint32_t region_index;
       Region region;
-      std::vector<Region> regions = input.get_regions();
+      branson::vector<Region> regions = input.get_regions();
 
       if (input.get_n_regions() != 3)
         three_region_pass = false;

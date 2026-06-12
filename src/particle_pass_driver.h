@@ -15,7 +15,7 @@
 #include <functional>
 #include <iostream>
 #include <mpi.h>
-#include <vector>
+#include "branson_vector.h"
 
 #include "config.h"
 #include "census_functions.h"
@@ -36,7 +36,7 @@ void imc_particle_pass_driver(Mesh &mesh, IMC_State &imc_state,
                               const IMC_Parameters &imc_parameters,
                               const MPI_Types &mpi_types,
                               const Info &mpi_info) {
-  using std::vector;
+  using branson::vector;
 #ifdef caliper_FOUND
     CALI_MARK_BEGIN("vec_imc_particle_pass_driver");
 #endif
