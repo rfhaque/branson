@@ -230,23 +230,12 @@ void make_photons(const double dt, const Mesh &mesh, const int rank, const uint3
     }
   }
 
-#ifdef caliper_FOUND
-    CALI_MARK_BEGIN("vec_make_photons");
-#endif
-  std::vector<uint64_t> photon_stream_nums(n_photons);
-  std::vector<double> photon_E(n_photons);
-  std::vector<int> photon_type(n_photons);
-  std::vector<int> photon_source_face(n_photons);
-  std::vector<uint32_t> photon_cell_index(n_photons);
-#ifdef caliper_FOUND
-    CALI_MARK_END("vec_make_photons");
-#endif
-
   #ifdef USE_GPU
   // Allocate output buffers and fill them on device.
   uint64_t *device_photon_stream_nums_ptr;
   auto alloc_err = cudaMalloc((void **)&device_photon_stream_nums_ptr, sizeof(uint64_t) * n_photons);
   Insist(!alloc_err, "CUDA/HIP error allocating photon seeds");
+  cudaError_t copy_err;
 
   double *device_photon_E_ptr;
   alloc_err = cudaMalloc((void **)&device_photon_E_ptr, sizeof(double) * n_photons);
@@ -267,8 +256,8 @@ void make_photons(const double dt, const Mesh &mesh, const int rank, const uint3
   uint64_t *device_cell_photon_offsets_ptr;
   alloc_err = cudaMalloc((void **)&device_cell_photon_offsets_ptr, sizeof(uint64_t) * n_cells);
   Insist(!alloc_err, "CUDA/HIP error allocating cell photon offsets");
-  auto copy_err = cudaMemcpy(device_cell_photon_offsets_ptr, cell_photon_offsets.data(),
-                             sizeof(uint64_t) * n_cells, cudaMemcpyHostToDevice);
+  copy_err = cudaMemcpy(device_cell_photon_offsets_ptr, cell_photon_offsets.data(),
+                        sizeof(uint64_t) * n_cells, cudaMemcpyHostToDevice);
   Insist(!copy_err, "CUDA/HIP error copying cell photon offsets to device");
 
   uint32_t *device_cell_census_counts_ptr;
@@ -336,6 +325,17 @@ void make_photons(const double dt, const Mesh &mesh, const int rank, const uint3
   auto sync_err = cudaDeviceSynchronize();
   Insist(!sync_err, "CUDA/HIP error synchronizing after source metadata kernel");
   #else
+#ifdef caliper_FOUND
+    CALI_MARK_BEGIN("vec_make_photons");
+#endif
+  std::vector<uint64_t> photon_stream_nums(n_photons);
+  std::vector<double> photon_E(n_photons);
+  std::vector<int> photon_type(n_photons);
+  std::vector<int> photon_source_face(n_photons);
+  std::vector<uint32_t> photon_cell_index(n_photons);
+#ifdef caliper_FOUND
+    CALI_MARK_END("vec_make_photons");
+#endif
   // use device pointers with host side data to share code below
   uint64_t *device_photon_stream_nums_ptr = photon_stream_nums.data();
   double *device_photon_E_ptr  = photon_E.data();

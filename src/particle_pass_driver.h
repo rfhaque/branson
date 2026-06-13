@@ -53,8 +53,7 @@ void imc_particle_pass_driver(Mesh &mesh, IMC_State &imc_state,
   const uint32_t seed = imc_parameters.get_rng_seed();
   Source_Scratch source_scratch(mesh.get_n_local_cells());
 
-  bool done = imc_state.finished();
-  while (!done) {
+  while (!imc_state.finished()) {
     if (rank == 0) {
 #ifdef caliper_FOUND
     CALI_MARK_BEGIN("ppa_print_timestep_header");
@@ -176,13 +175,6 @@ void imc_particle_pass_driver(Mesh &mesh, IMC_State &imc_state,
     imc_state.next_time_step();
 #ifdef caliper_FOUND
     CALI_MARK_END("ppa_next_time_step");
-#endif
-#ifdef caliper_FOUND
-    CALI_MARK_BEGIN("ppa_finished");
-#endif
-    done = imc_state.finished();
-#ifdef caliper_FOUND
-    CALI_MARK_END("ppa_finished");
 #endif
   }
 }
