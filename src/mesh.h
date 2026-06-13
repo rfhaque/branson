@@ -324,8 +324,8 @@ public:
 
   //! Use the absorbed energy and update the material temperature of each
   // cell on the mesh. Set diagnostic and conservation values.
-  void update_temperature(std::vector<double> &abs_E,
-                          std::vector<double> &track_E, IMC_State &imc_state) {
+  void update_temperature(double *abs_E, double *track_E,
+                          IMC_State &imc_state) {
     using Constants::a;
     using Constants::c;
     using std::setiosflags;
@@ -416,8 +416,8 @@ public:
     } // end verbose print block
 
     // zero out absorption tallies for all cells (global)
-    abs_E.assign(abs_E.size(), 0.0);
-    track_E.assign(track_E.size(), 0.0);
+    std::fill(abs_E, abs_E + n_cell, 0.0);
+    std::fill(track_E, track_E + n_cell, 0.0);
     imc_state.set_absorbed_E(total_abs_E);
     imc_state.set_post_mat_E(total_post_mat_E);
   }

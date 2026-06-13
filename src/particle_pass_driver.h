@@ -27,6 +27,7 @@
 #include "mpi_types.h"
 #include "particle_pass_transport.h"
 #include "source.h"
+#include "temporary_arrays.h"
 #include "timer.h"
 #include "write_silo.h"
 
@@ -35,13 +36,12 @@ template <typename Census_T>
 void imc_particle_pass_driver(Mesh &mesh, IMC_State &imc_state,
                               const IMC_Parameters &imc_parameters,
                               const MPI_Types &mpi_types,
-                              const Info &mpi_info) {
-  using std::vector;
+                              const Info &mpi_info,
+                              Temporary_Arrays &temporary_arrays) {
 #ifdef caliper_FOUND
     CALI_MARK_BEGIN("vec_imc_particle_pass_driver");
 #endif
-  vector<double> abs_E(mesh.get_n_local_cells(), 0.0);
-  vector<double> track_E(mesh.get_n_local_cells(), 0.0);
+  temporary_arrays.reset_tally_arrays();
 #ifdef caliper_FOUND
     CALI_MARK_END("vec_imc_particle_pass_driver");
 #endif
@@ -99,7 +99,9 @@ void imc_particle_pass_driver(Mesh &mesh, IMC_State &imc_state,
     Timer t_source;
     t_source.start_timer("source");
 
-    make_photons<Census_T>(imc_state.get_dt(), mesh, rank, imc_state.get_step(), seed, n_user_photons, global_source_energy, gpu_setup);
+    make_photons<Census_T>(imc_state.get_dt(), mesh, rank, imc_state.get_step(),
+                           seed, n_user_photons, global_source_energy,
+                           gpu_setup, temporary_arrays);
     auto &all_photons = gpu_setup.get_census_photons();
     imc_state.set_pre_census_E(get_photon_list_census_E(all_photons));
 
@@ -129,7 +131,9 @@ void imc_particle_pass_driver(Mesh &mesh, IMC_State &imc_state,
 #ifdef caliper_FOUND
     CALI_MARK_BEGIN("ppa_particle_pass_transport");
 #endif
-    particle_pass_transport(mesh, gpu_setup, imc_parameters, mpi_info, mpi_types, imc_state, mctr, abs_E, track_E, all_photons);
+    particle_pass_transport(mesh, gpu_setup, imc_parameters, mpi_info, mpi_types,
+                            imc_state, mctr, temporary_arrays.abs_E,
+                            temporary_arrays.track_E, all_photons);
 #ifdef caliper_FOUND
     CALI_MARK_END("ppa_particle_pass_transport");
 #endif
@@ -137,7 +141,8 @@ void imc_particle_pass_driver(Mesh &mesh, IMC_State &imc_state,
 #ifdef caliper_FOUND
     CALI_MARK_BEGIN("ppa_update_temperature");
 #endif
-    mesh.update_temperature(abs_E, track_E, imc_state);
+    mesh.update_temperature(temporary_arrays.abs_E, temporary_arrays.track_E,
+                            imc_state);
 #ifdef caliper_FOUND
     CALI_MARK_END("ppa_update_temperature");
 #endif

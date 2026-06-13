@@ -68,7 +68,7 @@ void print_memory_footprint(const T& particle_container, const std::string& cont
 
 template <typename Census_T>
 void replicated_transport(const Mesh& mesh, const GPU_Setup<Census_T>& gpu_setup, IMC_State& imc_state,
-  std::vector<double>& rank_abs_E, std::vector<double>& rank_track_E, Census_T& all_photons,
+  double *rank_abs_E, double *rank_track_E, Census_T& all_photons,
   const IMC_Parameters &imc_parameters) {
   using std::cout;
   using std::endl;

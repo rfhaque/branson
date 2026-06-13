@@ -36,7 +36,7 @@
 template <typename Census_T>
 void particle_pass_transport(
     const Mesh &mesh, const GPU_Setup<Census_T> &gpu_setup, const IMC_Parameters &imc_parameters, const Info &mpi_info, const MPI_Types &mpi_types,
-    IMC_State &imc_state, Message_Counter &mctr, std::vector<double> &rank_abs_E, std::vector<double> &rank_track_E, Census_T &all_photons) {
+    IMC_State &imc_state, Message_Counter &mctr, double *rank_abs_E, double *rank_track_E, Census_T &all_photons) {
   using std::vector;
 
   // is the GPU even available?

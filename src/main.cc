@@ -25,6 +25,7 @@
 #include "mpi_types.h"
 #include "particle_pass_driver.h"
 #include "replicated_driver.h"
+#include "temporary_arrays.h"
 #include "timer.h"
 
 using Constants::PARTICLE_PASS;
@@ -105,6 +106,10 @@ int main(int argc, char **argv) {
 
     Mesh mesh(input, mpi_types, mpi_info, imc_p);
     mesh.initialize_physical_properties(input);
+    const uint32_t n_tally_cells =
+        (input.get_dd_mode() == REPLICATED) ? mesh.get_n_global_cells()
+                                            : mesh.get_n_local_cells();
+    Temporary_Arrays temporary_arrays(mesh.get_n_local_cells(), n_tally_cells);
 
     timers.stop_timer("mesh setup");
 
@@ -123,12 +128,16 @@ int main(int argc, char **argv) {
     if (input.get_dd_mode() == PARTICLE_PASS) {
       if( input.get_particle_storage() == AOS) {
         timers.start_timer("particle pass aos");
-        imc_particle_pass_driver<std::vector<Photon>>(mesh, imc_state, imc_p, mpi_types, mpi_info);
+        imc_particle_pass_driver<std::vector<Photon>>(mesh, imc_state, imc_p,
+                                                      mpi_types, mpi_info,
+                                                      temporary_arrays);
         timers.stop_timer("particle pass aos");
       }
       else if(input.get_particle_storage() == SOA) {
         timers.start_timer("particle pass soa");
-        imc_particle_pass_driver<PhotonArray>(mesh, imc_state, imc_p, mpi_types, mpi_info);
+        imc_particle_pass_driver<PhotonArray>(mesh, imc_state, imc_p,
+                                              mpi_types, mpi_info,
+                                              temporary_arrays);
         timers.stop_timer("particle pass soa");
       }
       else {
@@ -139,12 +148,15 @@ int main(int argc, char **argv) {
     else if (input.get_dd_mode() == REPLICATED) {
       if(input.get_particle_storage() == AOS) {
         timers.start_timer("replicated aos");
-        imc_replicated_driver<std::vector<Photon>>(mesh, imc_state, imc_p, mpi_types, mpi_info);
+        imc_replicated_driver<std::vector<Photon>>(mesh, imc_state, imc_p,
+                                                   mpi_types, mpi_info,
+                                                   temporary_arrays);
         timers.stop_timer("replicated aos");
       }
       else if( input.get_particle_storage() == SOA) {
         timers.start_timer("replicated soa");
-        imc_replicated_driver<PhotonArray>(mesh, imc_state, imc_p, mpi_types, mpi_info);
+        imc_replicated_driver<PhotonArray>(mesh, imc_state, imc_p, mpi_types,
+                                           mpi_info, temporary_arrays);
         timers.stop_timer("replicated soa");
       }
       else {

@@ -29,16 +29,16 @@
 #include "mpi_types.h"
 #include "replicated_transport.h"
 #include "source.h"
+#include "temporary_arrays.h"
 #include "timer.h"
 #include "write_silo.h"
 
 template <typename Census_T>
 void imc_replicated_driver(Mesh &mesh, IMC_State &imc_state,
                            const IMC_Parameters &imc_parameters,
-                           const MPI_Types &mpi_types, const Info &mpi_info) {
-  using std::vector;
-  vector<double> abs_E(mesh.get_n_global_cells(), 0.0);
-  vector<double> track_E(mesh.get_n_global_cells(), 0.0);
+                           const MPI_Types &mpi_types, const Info &mpi_info,
+                           Temporary_Arrays &temporary_arrays) {
+  temporary_arrays.reset_tally_arrays();
   Census_T census_photons;
   auto n_user_photons = imc_parameters.get_n_user_photons();
   Message_Counter mctr;
@@ -68,7 +68,9 @@ void imc_replicated_driver(Mesh &mesh, IMC_State &imc_state,
     Timer t_source;
     t_source.start_timer("source");
 
-    make_photons<Census_T>(imc_state.get_dt(), mesh, rank, imc_state.get_step(),  seed, n_user_photons, global_source_energy, gpu_setup);
+    make_photons<Census_T>(imc_state.get_dt(), mesh, rank, imc_state.get_step(),
+                           seed, n_user_photons, global_source_energy,
+                           gpu_setup, temporary_arrays);
     auto &all_photons = gpu_setup.get_census_photons();
     imc_state.set_pre_census_E(get_photon_list_census_E(all_photons));
 
@@ -84,15 +86,20 @@ void imc_replicated_driver(Mesh &mesh, IMC_State &imc_state,
     // add barrier here to make sure the transport timer starts at roughly the same time
     MPI_Barrier(MPI_COMM_WORLD);
 
-    replicated_transport<Census_T>(mesh, gpu_setup, imc_state, abs_E, track_E, all_photons, imc_parameters);
+    replicated_transport<Census_T>(mesh, gpu_setup, imc_state,
+                                   temporary_arrays.abs_E,
+                                   temporary_arrays.track_E, all_photons,
+                                   imc_parameters);
 
     // reduce the abs_E and the track weighted energy (for T_r)
-    MPI_Allreduce(MPI_IN_PLACE, &abs_E[0], mesh.get_n_global_cells(),
+    MPI_Allreduce(MPI_IN_PLACE, temporary_arrays.abs_E, mesh.get_n_global_cells(),
                   MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
-    MPI_Allreduce(MPI_IN_PLACE, &track_E[0], mesh.get_n_global_cells(),
+    MPI_Allreduce(MPI_IN_PLACE, temporary_arrays.track_E,
+                  mesh.get_n_global_cells(),
                   MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
 
-    mesh.update_temperature(abs_E, track_E, imc_state);
+    mesh.update_temperature(temporary_arrays.abs_E, temporary_arrays.track_E,
+                            imc_state);
 
     MPI_Barrier(MPI_COMM_WORLD);
     // for replicated, just let root do conservation
