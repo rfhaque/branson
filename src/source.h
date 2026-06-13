@@ -324,20 +324,20 @@ void make_photons(const double dt, const Mesh &mesh, const int rank, const uint3
     Insist(!sync_err, "CUDA/HIP error synchronizing source initialization");
   }
 
-  auto free_err = cudaFree(device_E_cell_census_ptr);
-  Insist(!free_err, "error freeing device_E_cell_census_ptr");
-  free_err = cudaFree(device_E_cell_emission_ptr);
-  Insist(!free_err, "error freeing device_E_cell_emission_ptr");
-  free_err = cudaFree(device_E_cell_source_ptr);
-  Insist(!free_err, "error freeing device_E_cell_source_ptr");
-  free_err = cudaFree(device_source_census_count_ptr);
-  Insist(!free_err, "error freeing device_source_census_count_ptr");
-  free_err = cudaFree(device_source_emission_count_ptr);
-  Insist(!free_err, "error freeing device_source_emission_count_ptr");
-  free_err = cudaFree(device_source_boundary_count_ptr);
-  Insist(!free_err, "error freeing device_source_boundary_count_ptr");
-  free_err = cudaFree(device_source_offset_ptr);
-  Insist(!free_err, "error freeing device_source_offset_ptr");
+  auto init_free_err = cudaFree(device_E_cell_census_ptr);
+  Insist(!init_free_err, "error freeing device_E_cell_census_ptr");
+  init_free_err = cudaFree(device_E_cell_emission_ptr);
+  Insist(!init_free_err, "error freeing device_E_cell_emission_ptr");
+  init_free_err = cudaFree(device_E_cell_source_ptr);
+  Insist(!init_free_err, "error freeing device_E_cell_source_ptr");
+  init_free_err = cudaFree(device_source_census_count_ptr);
+  Insist(!init_free_err, "error freeing device_source_census_count_ptr");
+  init_free_err = cudaFree(device_source_emission_count_ptr);
+  Insist(!init_free_err, "error freeing device_source_emission_count_ptr");
+  init_free_err = cudaFree(device_source_boundary_count_ptr);
+  Insist(!init_free_err, "error freeing device_source_boundary_count_ptr");
+  init_free_err = cudaFree(device_source_offset_ptr);
+  Insist(!init_free_err, "error freeing device_source_offset_ptr");
 #else
   for (uint32_t i = 0; i < temporary_arrays.get_n_source_cells(); ++i) {
     const uint64_t cell_offset = temporary_arrays.source_offset[i];
