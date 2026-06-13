@@ -49,9 +49,17 @@ void imc_particle_pass_driver(Mesh &mesh, IMC_State &imc_state,
   Message_Counter mctr;
   const int rank = mpi_info.get_rank();
   const int n_ranks = mpi_info.get_n_rank();
+  const uint32_t n_adjacent = mesh.get_proc_adjacency_list().size();
+  const uint32_t max_buffer_size = imc_parameters.get_particle_message_size();
+  const uint64_t particle_pass_capacity =
+      n_user_photons + mesh.get_n_local_cells() +
+      static_cast<uint64_t>(n_adjacent) * max_buffer_size;
 
   const uint32_t seed = imc_parameters.get_rng_seed();
   Source_Scratch source_scratch(mesh.get_n_local_cells());
+  ParticlePassScratch<Census_T> particle_pass_scratch(
+      mesh.get_n_local_cells(), n_adjacent, max_buffer_size,
+      imc_parameters.get_dd_batch_size(), particle_pass_capacity);
 
   while (!imc_state.finished()) {
     if (rank == 0) {
@@ -130,7 +138,9 @@ void imc_particle_pass_driver(Mesh &mesh, IMC_State &imc_state,
 #ifdef caliper_FOUND
     CALI_MARK_BEGIN("ppa_particle_pass_transport");
 #endif
-    particle_pass_transport(mesh, gpu_setup, imc_parameters, mpi_info, mpi_types, imc_state, mctr, abs_E, track_E, all_photons);
+    particle_pass_transport(mesh, gpu_setup, imc_parameters, mpi_info, mpi_types,
+                            imc_state, mctr, abs_E, track_E, all_photons,
+                            particle_pass_scratch);
 #ifdef caliper_FOUND
     CALI_MARK_END("ppa_particle_pass_transport");
 #endif
