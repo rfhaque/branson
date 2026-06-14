@@ -73,6 +73,7 @@ inline void fill_particle_pass_batch(PhotonArray &batch, const PhotonArray &sour
 template <typename Census_T>
 struct ParticlePassScratch {
   std::vector<std::vector<Photon>> send_list;
+  std::vector<size_t> send_list_offset;
   std::vector<Cell_Tally> cell_tallies;
   std::vector<MPI_Request> phtn_recv_request;
   std::vector<MPI_Request> phtn_send_request;
@@ -82,13 +83,13 @@ struct ParticlePassScratch {
   Census_T commed_census_particles;
   std::vector<Photon> aos_batch_photons;
   PhotonArray soa_batch_photons;
-  std::vector<Photon> send_now_list;
   std::vector<Photon> one_photon;
 
   ParticlePassScratch(const uint32_t n_local_cells, const uint32_t n_adjacent,
                       const uint32_t max_buffer_size, const uint32_t dd_batch_size,
                       const uint64_t particle_capacity)
-      : send_list(n_adjacent), cell_tallies(n_local_cells),
+      : send_list(n_adjacent), send_list_offset(n_adjacent, 0),
+        cell_tallies(n_local_cells),
         phtn_recv_request(n_adjacent), phtn_send_request(n_adjacent),
         phtn_recv_buffer(n_adjacent), phtn_send_buffer(n_adjacent), one_photon(1) {
     for (uint32_t i = 0; i < n_adjacent; ++i) {
@@ -100,12 +101,14 @@ struct ParticlePassScratch {
     reserve_particle_pass_container(commed_census_particles, particle_capacity);
     aos_batch_photons.reserve(dd_batch_size);
     soa_batch_photons.reserve(dd_batch_size);
-    send_now_list.reserve(max_buffer_size);
   }
 
   void reset_timestep() {
-    for (auto &queue : send_list)
+    for (size_t i = 0; i < send_list.size(); ++i) {
+      auto &queue = send_list[i];
       queue.clear();
+      send_list_offset[i] = 0;
+    }
     std::fill(cell_tallies.begin(), cell_tallies.end(), Cell_Tally{});
     for (auto &buffer : phtn_recv_buffer)
       buffer.reset();
@@ -115,7 +118,6 @@ struct ParticlePassScratch {
     commed_census_particles.clear();
     aos_batch_photons.clear();
     soa_batch_photons.clear();
-    send_now_list.clear();
   }
 };
 
@@ -171,6 +173,7 @@ void particle_pass_transport(
   uint32_t n_adjacent = adjacent_procs.size();
   scratch.reset_timestep();
   auto &send_list = scratch.send_list;
+  auto &send_list_offset = scratch.send_list_offset;
   auto &cell_tallies = scratch.cell_tallies;
 
   // Completion count request made flag
@@ -292,16 +295,38 @@ void particle_pass_transport(
 
       // send full photon buffers if send_list has some photons in it
       //if (phtn_send_buffer[i_b].empty() && !send_list[i_b].empty()) {
-      if (phtn_send_buffer[i_b].empty() && (send_list[i_b].size() == max_buffer_size || (!send_list[i_b].empty() && local_work_done == true))) {
-        const uint32_t n_photons_to_send = (send_list[i_b].size() <= max_buffer_size) ?
-            send_list[i_b].size() : max_buffer_size;
-        vector<Photon>::iterator copy_start = send_list[i_b].begin();
-        vector<Photon>::iterator copy_end = send_list[i_b].begin() + n_photons_to_send;
-        auto &send_now_list = scratch.send_now_list;
-        send_now_list.clear();
-        send_now_list.insert(send_now_list.end(), copy_start, copy_end);
-        send_list[i_b].erase(copy_start, copy_end);
-        phtn_send_buffer[i_b].fill(send_now_list);
+      const size_t pending_send_count = send_list[i_b].size() - send_list_offset[i_b];
+      if (phtn_send_buffer[i_b].empty() &&
+          (pending_send_count == max_buffer_size ||
+           (pending_send_count > 0 && local_work_done == true))) {
+        const uint32_t n_photons_to_send =
+            (pending_send_count <= max_buffer_size) ? pending_send_count
+                                                    : max_buffer_size;
+        vector<Photon>::iterator copy_start =
+            send_list[i_b].begin() + send_list_offset[i_b];
+        vector<Photon>::iterator copy_end = copy_start + n_photons_to_send;
+        auto &send_buffer_object = phtn_send_buffer[i_b].get_object_ref();
+        send_buffer_object.clear();
+        send_buffer_object.insert(send_buffer_object.end(), copy_start, copy_end);
+        send_list_offset[i_b] += n_photons_to_send;
+        if (send_list_offset[i_b] == send_list[i_b].size()) {
+          send_list[i_b].clear();
+          send_list_offset[i_b] = 0;
+        } else {
+          const size_t pending_after_send =
+              send_list[i_b].size() - send_list_offset[i_b];
+          // Compact occasionally so the consumed prefix does not grow without
+          // paying the cost of front-erase on every send.
+          if (send_list_offset[i_b] >= max_buffer_size &&
+              send_list_offset[i_b] >= pending_after_send) {
+            auto remaining_begin =
+                send_list[i_b].begin() + send_list_offset[i_b];
+            std::move(remaining_begin, send_list[i_b].end(),
+                      send_list[i_b].begin());
+            send_list[i_b].resize(pending_after_send);
+            send_list_offset[i_b] = 0;
+          }
+        }
         MPI_Isend(phtn_send_buffer[i_b].get_buffer(), n_photons_to_send, MPI_Particle, adj_rank,
           Constants::photon_tag, MPI_COMM_WORLD, &phtn_send_request[i_b]);
         phtn_send_buffer[i_b].set_sent();
