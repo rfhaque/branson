@@ -122,14 +122,14 @@ cudaError_t umpireMalloc(T** devPtr, size_t size);
 
 #endif
 
-//#ifdef USE_UMPIRE
-//void umpireHostMalloc(void** ptr, size_t size);
-//void umpireHostFree(void* ptr);
-//template <typename T>
-//void umpireHostMalloc(T** ptr, size_t size);
-//#define hostFree umpireHostFree
-//#define hostMalloc umpireHostMalloc
-//#else
+#ifdef USE_UMPIRE
+void umpireHostMalloc(void** ptr, size_t size);
+void umpireHostFree(void* ptr);
+template <typename T>
+void umpireHostMalloc(T** ptr, size_t size);
+#define hostFree umpireHostFree
+#define hostMalloc umpireHostMalloc
+#else
 void hostMalloc(void** ptr, size_t size) {
   *ptr = std::malloc(size);
 }
@@ -143,7 +143,7 @@ void hostMalloc(T** ptr, size_t size) {
 void hostFree(void* ptr) {
   std::free(ptr);
 }
-//#endif
+#endif
 
 inline void Insist(const bool pass, const std::string &message) {
   if (!pass) {
@@ -167,7 +167,7 @@ inline void Insist(const bool pass, const std::string &message) {
 void makeUmpireHostPool() {
   auto &rm = umpire::ResourceManager::getInstance();
   const char * allocator_name = "BRANSON_HOST_POOL";
-  size_t umpire_host_pool_size = 16 * 1024 * 1024 * 1024;
+  size_t umpire_host_pool_size = 64 * 1024 * 1024 * 1024;
   size_t umpire_host_block_size = 512;
   auto host_pool_allocator = rm.makeAllocator<umpire::strategy::QuickPool>(allocator_name, rm.getAllocator("HOST"), umpire_host_pool_size, umpire_host_block_size);
   // force allocation of GPU memory pool
