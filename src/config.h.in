@@ -122,14 +122,14 @@ cudaError_t umpireMalloc(T** devPtr, size_t size);
 
 #endif
 
-#ifdef USE_UMPIRE
-void umpireHostMalloc(void** ptr, size_t size);
-void umpireHostFree(void* ptr);
-template <typename T>
-void umpireHostMalloc(T** ptr, size_t size);
-#define hostFree umpireHostFree
-#define hostMalloc umpireHostMalloc
-#else
+//#ifdef USE_UMPIRE
+//void umpireHostMalloc(void** ptr, size_t size);
+//void umpireHostFree(void* ptr);
+//template <typename T>
+//void umpireHostMalloc(T** ptr, size_t size);
+//#define hostFree umpireHostFree
+//#define hostMalloc umpireHostMalloc
+//#else
 void hostMalloc(void** ptr, size_t size) {
   *ptr = std::malloc(size);
 }
@@ -143,7 +143,7 @@ void hostMalloc(T** ptr, size_t size) {
 void hostFree(void* ptr) {
   std::free(ptr);
 }
-#endif
+//#endif
 
 inline void Insist(const bool pass, const std::string &message) {
   if (!pass) {
