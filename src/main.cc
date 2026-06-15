@@ -86,7 +86,7 @@ int main(int argc, char **argv) {
 #endif
 
 #ifdef USE_UMPIRE
-    makeUmpireHostPool();
+    makeUmpireHostPool(input.get_umpire_host_pool_size());
 #endif
 #ifdef USE_GPU
 #ifdef USE_UMPIRE
