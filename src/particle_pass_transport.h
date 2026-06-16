@@ -43,6 +43,87 @@ inline void reserve_particle_pass_container(PhotonArray &container,
   container.reserve(static_cast<size_t>(capacity));
 }
 
+inline void append_received_photons(std::vector<Photon> &destination,
+                                    const Photon *received_photons,
+                                    const size_t received_count) {
+  destination.insert(destination.end(), received_photons,
+                     received_photons + received_count);
+}
+
+inline void append_received_photons(PhotonArray &destination,
+                                    const Photon *received_photons,
+                                    const size_t received_count) {
+  const size_t original_size = destination.size();
+  destination.resize(original_size + received_count);
+
+  for (size_t i = 0; i < received_count; ++i) {
+    const Photon &photon = received_photons[i];
+    const size_t dest_index = original_size + i;
+    destination.cell_ID[dest_index] = photon.get_cell();
+    destination.group[dest_index] = photon.get_group();
+    destination.source_type[dest_index] = photon.get_source_type();
+    destination.descriptors[dest_index] =
+        static_cast<unsigned char>(photon.get_descriptor());
+    destination.pos[dest_index] = photon.get_position();
+    destination.angle[dest_index] = photon.get_angle();
+    destination.E[dest_index] = photon.get_E();
+    destination.E0[dest_index] = photon.get_E0();
+    destination.life_dx[dest_index] = photon.get_distance_remaining();
+    destination.rng[dest_index] = photon.get_rng();
+  }
+}
+
+inline uint32_t fill_send_buffer(std::vector<Photon> &send_queue,
+                                 size_t &send_queue_offset,
+                                 std::vector<Photon> &send_buffer,
+                                 const uint32_t max_buffer_size,
+                                 const bool local_work_done) {
+  const size_t pending_send_count = send_queue.size() - send_queue_offset;
+  if (pending_send_count == 0) {
+    return 0;
+  }
+
+  if (!(pending_send_count == max_buffer_size ||
+        (pending_send_count > 0 && local_work_done))) {
+    return 0;
+  }
+
+  if (send_queue_offset == 0 && pending_send_count <= max_buffer_size) {
+    send_buffer.clear();
+    send_buffer.swap(send_queue);
+    return static_cast<uint32_t>(send_buffer.size());
+  }
+
+  const uint32_t n_photons_to_send =
+      (pending_send_count <= max_buffer_size)
+          ? static_cast<uint32_t>(pending_send_count)
+          : max_buffer_size;
+
+  send_buffer.resize(n_photons_to_send);
+  std::copy(send_queue.begin() + send_queue_offset,
+            send_queue.begin() + send_queue_offset + n_photons_to_send,
+            send_buffer.begin());
+
+  send_queue_offset += n_photons_to_send;
+  if (send_queue_offset == send_queue.size()) {
+    send_queue.clear();
+    send_queue_offset = 0;
+  } else {
+    const size_t pending_after_send = send_queue.size() - send_queue_offset;
+    // Compact occasionally so the consumed prefix does not grow without
+    // paying the cost of front-erase on every send.
+    if (send_queue_offset >= max_buffer_size &&
+        send_queue_offset >= pending_after_send) {
+      auto remaining_begin = send_queue.begin() + send_queue_offset;
+      std::move(remaining_begin, send_queue.end(), send_queue.begin());
+      send_queue.resize(pending_after_send);
+      send_queue_offset = 0;
+    }
+  }
+
+  return n_photons_to_send;
+}
+
 inline void fill_particle_pass_batch(PhotonArray &batch, const PhotonArray &source,
                                      const size_t batch_start,
                                      const size_t batch_end) {
@@ -295,45 +376,22 @@ void particle_pass_transport(
 
       // send full photon buffers if send_list has some photons in it
       //if (phtn_send_buffer[i_b].empty() && !send_list[i_b].empty()) {
-      const size_t pending_send_count = send_list[i_b].size() - send_list_offset[i_b];
-      if (phtn_send_buffer[i_b].empty() &&
-          (pending_send_count == max_buffer_size ||
-           (pending_send_count > 0 && local_work_done == true))) {
-        const uint32_t n_photons_to_send =
-            (pending_send_count <= max_buffer_size) ? pending_send_count
-                                                    : max_buffer_size;
-        vector<Photon>::iterator copy_start =
-            send_list[i_b].begin() + send_list_offset[i_b];
-        vector<Photon>::iterator copy_end = copy_start + n_photons_to_send;
+      if (phtn_send_buffer[i_b].empty()) {
         auto &send_buffer_object = phtn_send_buffer[i_b].get_object_ref();
-        send_buffer_object.clear();
-        send_buffer_object.insert(send_buffer_object.end(), copy_start, copy_end);
-        send_list_offset[i_b] += n_photons_to_send;
-        if (send_list_offset[i_b] == send_list[i_b].size()) {
-          send_list[i_b].clear();
-          send_list_offset[i_b] = 0;
-        } else {
-          const size_t pending_after_send =
-              send_list[i_b].size() - send_list_offset[i_b];
-          // Compact occasionally so the consumed prefix does not grow without
-          // paying the cost of front-erase on every send.
-          if (send_list_offset[i_b] >= max_buffer_size &&
-              send_list_offset[i_b] >= pending_after_send) {
-            auto remaining_begin =
-                send_list[i_b].begin() + send_list_offset[i_b];
-            std::move(remaining_begin, send_list[i_b].end(),
-                      send_list[i_b].begin());
-            send_list[i_b].resize(pending_after_send);
-            send_list_offset[i_b] = 0;
-          }
+        const uint32_t n_photons_to_send =
+            fill_send_buffer(send_list[i_b], send_list_offset[i_b],
+                             send_buffer_object, max_buffer_size,
+                             local_work_done);
+        if (n_photons_to_send > 0) {
+          MPI_Isend(phtn_send_buffer[i_b].get_buffer(), n_photons_to_send,
+                    MPI_Particle, adj_rank, Constants::photon_tag,
+                    MPI_COMM_WORLD, &phtn_send_request[i_b]);
+          phtn_send_buffer[i_b].set_sent();
+          // update counters
+          mctr.n_particles_sent += n_photons_to_send;
+          mctr.n_sends_posted++;
+          mctr.n_particle_messages++;
         }
-        MPI_Isend(phtn_send_buffer[i_b].get_buffer(), n_photons_to_send, MPI_Particle, adj_rank,
-          Constants::photon_tag, MPI_COMM_WORLD, &phtn_send_request[i_b]);
-        phtn_send_buffer[i_b].set_sent();
-        // update counters
-         mctr.n_particles_sent += n_photons_to_send;
-         mctr.n_sends_posted++;
-         mctr.n_particle_messages++;
       }
 
       // process receive buffer
@@ -344,8 +402,9 @@ void particle_pass_transport(
               phtn_recv_buffer[i_b].get_object();
           // only push the number of received photons onto the recv_list
           MPI_Get_count(&recv_status, MPI_Particle, &recv_count);
-          for (uint32_t i = 0; i < uint32_t(recv_count); ++i)
-            phtn_recv_list.push_back(receive_list[i]);
+          append_received_photons(
+              phtn_recv_list, receive_list.data(),
+              static_cast<size_t>(recv_count));
           phtn_recv_buffer[i_b].reset();
           // post receive again, don't resize--it's already set to maximum
           MPI_Irecv(phtn_recv_buffer[i_b].get_buffer(), max_buffer_size,
