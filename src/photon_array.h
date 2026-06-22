@@ -90,12 +90,12 @@ public:
       for (size_type j = 0; j < i; ++j) {
         std::destroy_at(new_data + j);
       }
-      hostFree(new_data);
+      std::free(new_data);
       throw;
     }
 
     destroy_range(0, size_);
-    hostFree(data_);
+    std::free(data_);
     data_ = new_data;
     capacity_ = new_capacity;
   }
@@ -163,7 +163,7 @@ private:
       return nullptr;
     }
 
-    T* raw; hostMalloc(&raw, count * sizeof(T));
+    T *raw = static_cast<T *>(std::malloc(count * sizeof(T)));
     if (raw == nullptr) {
       throw std::bad_alloc();
     }
@@ -194,7 +194,7 @@ private:
 
   void reset() noexcept {
     clear();
-    hostFree(data_);
+    std::free(data_);
     data_ = nullptr;
     capacity_ = 0;
   }
@@ -217,7 +217,7 @@ private:
       for (size_type j = 0; j < i; ++j) {
         std::destroy_at(data_ + j);
       }
-      hostFree(data_);
+      std::free(data_);
       data_ = nullptr;
       capacity_ = 0;
       throw;

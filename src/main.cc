@@ -85,9 +85,6 @@ int main(int argc, char **argv) {
     adiak::collect_all();
 #endif
 
-#ifdef USE_UMPIRE
-    makeUmpireHostPool(input.get_umpire_host_pool_size());
-#endif
 #ifdef USE_GPU
 #ifdef USE_UMPIRE
     makeUmpireDevicePool(input.get_umpire_device_pool_size());
