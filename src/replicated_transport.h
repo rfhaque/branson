@@ -21,7 +21,8 @@
 #include "history_based_transport.h"
 #include "event_based_transport.h"
 #include "photon.h"
-#include "photon_array.h" // Include PhotonArray
+#include "photon_array.h"
+#include "photon_data.h"
 #include "transport_mode_wrapper.h"
 
 // Add function to calculate memory usage for both approaches
@@ -67,7 +68,7 @@ void print_memory_footprint(const T& particle_container, const std::string& cont
 }
 
 template <typename Census_T>
-void replicated_transport(const Mesh& mesh, const GPU_Setup<Census_T>& gpu_setup, IMC_State& imc_state,
+void replicated_transport(const Mesh& mesh, GPU_Setup<Census_T> &gpu_setup, IMC_State& imc_state,
   std::vector<double>& rank_abs_E, std::vector<double>& rank_track_E, Census_T& all_photons,
   const IMC_Parameters &imc_parameters) {
   using std::cout;
@@ -135,16 +136,22 @@ void replicated_transport(const Mesh& mesh, const GPU_Setup<Census_T>& gpu_setup
   //------------------------------------------------------------------------//
   // main transport loop
   //------------------------------------------------------------------------//
+  {
+    // copies photons to device
+    Photon_Data photon_data(all_photons);
 
-  vector<Cell_Tally> cell_tallies(mesh.get_n_local_cells()); // Initialize tallies (zeroed)
-  uint32_t rank_cell_offset{ 0 }; // no offset in replicated mesh
-  std::vector<std::vector<Photon>> null_send_list(0); // not used in replicated mode
+    uint32_t rank_cell_offset{ 0 }; // no offset in replicated mesh
+    std::vector<std::vector<Photon>> null_send_list(0); // not used in replicated mode
 
-  auto [batch_complete, batch_exit_E, batch_census_E] = batch_transport(next_dt, gpu_available, gpu_setup, imc_parameters, rank_cell_offset, mesh, all_photons, null_send_list, cell_tallies, t_transport);
-  auto n_complete = batch_complete;
-  census_E += batch_census_E;
-  exit_E += batch_exit_E;
+    auto [batch_complete, batch_exit_E, batch_census_E] = batch_transport(next_dt, gpu_available, gpu_setup, imc_parameters, rank_cell_offset, mesh, photon_data, static_cast<size_t>(0), all_photons.size(), null_send_list, t_transport);
+    auto n_complete = batch_complete;
+    census_E += batch_census_E;
+    exit_E += batch_exit_E;
 
+  } // destructor for photon_data free GPU data if allocated
+
+  gpu_setup.sync_cell_tallies();
+  const vector<Cell_Tally> &cell_tallies = gpu_setup.get_cell_tallies();
   // copy cell tallies back out to rank_abs_E and rank_track_E
   // This should happen regardless of CPU/GPU or algorithm, using the final cell_tallies state.
   for (size_t i = 0; i < cell_tallies.size();++i) {
@@ -162,7 +169,7 @@ void replicated_transport(const Mesh& mesh, const GPU_Setup<Census_T>& gpu_setup
   imc_state.set_exit_E(exit_E);
   imc_state.set_post_census_E(census_E);
   imc_state.set_rank_transport_runtime(
-    t_transport.get_time("timestep transport"));
+  t_transport.get_time("timestep transport"));
 
   // remove everything but photons marked census
   remove_inactive_photons(all_photons);

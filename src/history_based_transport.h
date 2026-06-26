@@ -22,8 +22,10 @@
 #include "RNG.h"
 #include "cell_tally.h"
 #include "constants.h"
+#include "gpu_setup.h"
 #include "photon.h"
 #include "photon_array.h"
+#include "photon_data.h"
 #include "sampling_functions.h"
 
 //----------------------------------------------------------------------------//
@@ -594,11 +596,11 @@ void transport_photon_history_soa_gpu(const uint32_t rank_cell_offset,
 
 //! Transport photons using history-based method on CPU (AoS version)
 void history_cpu_transport_photons(const uint32_t rank_cell_offset,
-    std::vector<Photon> &photons, const std::vector<Cell> &cells, std::vector<Cell_Tally> &cell_tallies, int n_omp_threads) {
+    std::vector<Photon> &photons, size_t batch_start, size_t batch_end, GPU_Setup<std::vector<Photon>> &gpu_setup, int n_omp_threads) {
 
-  auto cpu_cells_ptr{cells.data()};
-  auto cpu_tallies_ptr{cell_tallies.data()};
-  const auto n_cells = cell_tallies.size();
+  auto cpu_cells_ptr{gpu_setup.get_device_cells_ptr()}; // CPU data here
+  auto cpu_tallies_ptr{gpu_setup.get_device_cell_tallies_ptr()}; // CPU data here
+  const auto n_cells = gpu_setup.get_n_cells();
 
 #ifdef USE_OPENMP
   std::vector<std::vector<Cell_Tally>> thread_tallies(n_omp_threads);
@@ -609,7 +611,7 @@ void history_cpu_transport_photons(const uint32_t rank_cell_offset,
     auto thread_tally_ptr = thread_tallies[tid].data();
 
 #pragma omp for schedule(guided)
-    for (int i=0; i<photons.size(); ++i) {
+    for (size_t i=batch_start; i<batch_end; ++i) {
       // Call the CPU version
       transport_photon_history_aos_cpu(rank_cell_offset, photons[i], cpu_cells_ptr, thread_tally_ptr);
     }
@@ -622,19 +624,21 @@ void history_cpu_transport_photons(const uint32_t rank_cell_offset,
   }
 #else
   // normal serial version
-  for (auto &photon : photons)
+  for (size_t i=batch_start; i<batch_end; ++i) {
     // Call the CPU version
-    transport_photon_history_aos_cpu(rank_cell_offset, photon, cpu_cells_ptr, cpu_tallies_ptr);
+    transport_photon_history_aos_cpu(rank_cell_offset, photons[i], cpu_cells_ptr, cpu_tallies_ptr);
+  }
 #endif
 }
 
 //! Transport photons using history-based method on CPU (SoA version)
 void history_cpu_transport_photons(const uint32_t rank_cell_offset,
-    PhotonArray &photons, const std::vector<Cell> &cells, std::vector<Cell_Tally> &cell_tallies, int n_omp_threads) {
+    PhotonArray &photons, size_t batch_start, size_t batch_end, GPU_Setup<PhotonArray> &gpu_setup,
+    int n_omp_threads) {
 
-  auto cpu_cells_ptr{cells.data()};
-  auto cpu_tallies_ptr{cell_tallies.data()};
-  const auto n_cells = cell_tallies.size();
+  auto cpu_cells_ptr{gpu_setup.get_device_cells_ptr()}; // CPU data here
+  auto cpu_tallies_ptr{gpu_setup.get_device_cell_tallies_ptr()}; // CPU data here
+  const auto n_cells = gpu_setup.get_n_cells();
   const size_t n_photons = photons.size();
 
 #ifdef USE_OPENMP
@@ -646,7 +650,7 @@ void history_cpu_transport_photons(const uint32_t rank_cell_offset,
     auto thread_tally_ptr = thread_tallies[tid].data();
 
 #pragma omp for schedule(guided)
-    for (size_t i=0; i<n_photons; ++i) {
+    for (size_t i=batch_start; i<batch_end; ++i) {
       // Call the CPU version
       transport_photon_history_soa_cpu(rank_cell_offset, i, photons, cpu_cells_ptr, thread_tally_ptr);
     }
@@ -659,7 +663,7 @@ void history_cpu_transport_photons(const uint32_t rank_cell_offset,
   }
 #else
   // normal serial version
-  for (size_t i=0; i<n_photons; ++i) {
+  for (size_t i=batch_start; i<batch_end; ++i) {
     // Call the CPU version
     transport_photon_history_soa_cpu(rank_cell_offset, i, photons, cpu_cells_ptr, cpu_tallies_ptr);
   }
@@ -703,65 +707,66 @@ void gpu_history_transport_soa_kernel(const uint32_t rank_cell_offset,
 }
 
 //----------------------------------------------------------------------------//
-// GPU Transport Functions (Host) - Overloads for AoS and SoA
+// GPU Transport Functions (Host)
 //----------------------------------------------------------------------------//
 
 //! Transport photons using history-based method on GPU (AoS version)
+template <typename Census_T>
 void gpu_transport_photons(const uint32_t rank_cell_offset,
-    std::vector<Photon> &cpu_photons, const Cell *device_cells_ptr, std::vector<Cell_Tally> &cpu_cell_tallies) {
+    Photon_Data<Census_T> &photon_data, size_t batch_start, size_t batch_end, GPU_Setup<Census_T> &gpu_setup) {
 
 #ifdef USE_GPU
   Timer t_transport;
-  t_transport.start_timer("aos_gpu_transport_photons");
-  size_t n_photons = cpu_photons.size();
-  if (n_photons == 0) return; // No work to do
+  std::string timer_name;
+  std::string kernel_name;
 
-  device_debug_print(n_photons, "History AoS");
+  if constexpr (std::is_same_v<Census_T, std::vector<Photon>>) {
+    timer_name ="aos_gpu_transport_photons";
+  }
+  else {
+    timer_name ="soa_gpu_transport_photons";
+  }
+  t_transport.start_timer(timer_name);
 
-  // Allocate and copy photons
-  Photon *device_photons_ptr;
-  auto alloc_err = cudaMalloc((void **)&device_photons_ptr, sizeof(Photon) * n_photons);
-  Insist(!alloc_err, "CUDA/HIP error allocating photons");
-  auto copy_err = cudaMemcpy(device_photons_ptr, cpu_photons.data(), sizeof(Photon) * n_photons, cudaMemcpyHostToDevice);
-  Insist(!copy_err, "CUDA/HIP error copying photons to device");
 
-  // Allocate and copy cell tallies (zero initialize on device)
-  Cell_Tally *device_cell_tallies_ptr;
-  size_t tallies_size = sizeof(Cell_Tally) * cpu_cell_tallies.size();
-  alloc_err = cudaMalloc((void **)&device_cell_tallies_ptr, tallies_size);
-  Insist(!alloc_err, "CUDA/HIP error allocating cell tallies");
-  copy_err = cudaMemcpy(device_cell_tallies_ptr, cpu_cell_tallies.data(), cpu_cell_tallies.size()* sizeof(Cell_Tally), cudaMemcpyHostToDevice);
-  Insist(!copy_err, "CUDA/HIP error copying cell tallies");
+  size_t n_batch_photons = batch_end - batch_start;
+  if (n_batch_photons == 0) return; // No work to do
+
+  device_debug_print(n_batch_photons, timer_name);
 
   // Kernel settings
   int n_threads = Constants::n_threads_per_block;
-  int n_blocks = (n_photons + n_threads - 1) / n_threads;
+  int n_blocks = (n_batch_photons + n_threads - 1) / n_threads;
 
-  // Launch kernel
-  t_transport.start_timer("aos kernel");
-  gpu_history_transport_aos_kernel<<<n_blocks, n_threads>>>(
-      rank_cell_offset, device_photons_ptr, device_cells_ptr, device_cell_tallies_ptr, n_photons);
+  if constexpr (std::is_same_v<Census_T, std::vector<Photon>>) {
+    // Launch kernel
+    gpu_history_transport_aos_kernel<<<n_blocks, n_threads>>>(
+        rank_cell_offset, photon_data.photon_ptr, gpu_setup.get_device_cells_ptr(), gpu_setup.get_device_cell_tallies_ptr(), n_batch_photons);
+  }
+  else {
+    // set pointers for this batch
+    uint32_t *d_cell_ID = photon_data.cell_ID_ptr + batch_start;
+    uint32_t *d_group = photon_data.group_ptr + batch_start;
+    unsigned char *d_descriptors = photon_data.descriptors_ptr + batch_start;
+    std::array<double, 3> *d_pos = photon_data.pos_ptr + batch_start;
+    std::array<double, 3> *d_angle = photon_data.angle_ptr + batch_start;
+    double *d_E = photon_data.E_ptr + batch_start;
+    double *d_E0 = photon_data.E0_ptr + batch_start;
+    double *d_life_dx = photon_data.life_dx_ptr + batch_start;
+    RNG *d_RNG = photon_data.RNG_ptr + batch_start;
+
+    gpu_history_transport_soa_kernel<<<n_blocks, n_threads>>>(
+        rank_cell_offset, d_cell_ID, d_group, d_descriptors, d_pos, d_angle,
+        d_E, d_E0, d_life_dx, d_RNG,
+        gpu_setup.get_device_cells_ptr(), gpu_setup.get_device_cell_tallies_ptr(), n_batch_photons);
+  }
 
   auto kernel_err = cudaGetLastError();
-  Insist(!kernel_err, "CUDA/HIP error in history AoS kernel launch");
+  Insist(!kernel_err, "CUDA/HIP error in history kernel launch");
   auto sync_err = cudaDeviceSynchronize();
-  t_transport.stop_timer("aos kernel");
-  Insist(!sync_err, "CUDA/HIP error synchronizing after history AoS kernel");
+  Insist(!sync_err, "CUDA/HIP error synchronizing after history kernel");
 
-  // Copy particles back to host
-  copy_err = cudaMemcpy(cpu_photons.data(), device_photons_ptr, n_photons * sizeof(Photon), cudaMemcpyDeviceToHost);
-  Insist(!copy_err, "CUDA/HIP error copying photons back to host");
-
-  // Copy cell tallies back to host
-  copy_err = cudaMemcpy(cpu_cell_tallies.data(), device_cell_tallies_ptr, tallies_size, cudaMemcpyDeviceToHost);
-  Insist(!copy_err, "CUDA/HIP error copying cell tallies back to host");
-
-  // Free device memory
-  auto free_err = cudaFree(device_photons_ptr);
-  Insist(!free_err, "error freeing device_photons_ptr");
-  free_err = cudaFree(device_cell_tallies_ptr);
-  Insist(!free_err, "error freeing device_cell_tallies_ptr");
-  t_transport.stop_timer("aos_gpu_transport_photons");
+  t_transport.stop_timer(timer_name);
 #else
   // Provide a fallback or error if GPU is not enabled but this function is called
   std::cerr << "Warning: GPU transport called but CUDA/HIP is not enabled. Running on CPU." << std::endl;
@@ -773,162 +778,9 @@ void gpu_transport_photons(const uint32_t rank_cell_offset,
 #endif
   // Need the host cells vector if running on CPU
   std::vector<Cell> host_cells; // Placeholder - needs actual data if fallback is used
-  history_cpu_transport_photons(rank_cell_offset, cpu_photons, host_cells, cpu_cell_tallies, n_omp_threads);
+  history_cpu_transport_photons(rank_cell_offset, photons.photons, batch_start, batch_end, gpu_setup, n_omp_threads);
 #endif
 }
-
-
-//! Transport photons using history-based method on GPU (SoA version)
-void gpu_transport_photons(const uint32_t rank_cell_offset,
-    PhotonArray &cpu_photons, const Cell *device_cells_ptr, std::vector<Cell_Tally> &cpu_cell_tallies) {
-
-#ifdef USE_GPU
-  Timer t_transport;
-  t_transport.start_timer("soa_gpu_transport_photons");
-  size_t n_photons = cpu_photons.size();
-  if (n_photons == 0) return; // No work to do
-
-  device_debug_print(n_photons, "History SoA");
-
-  // Allocate SoA data on GPU
-  uint32_t* d_cell_ID;
-  auto malloc_err = cudaMalloc((void**)&d_cell_ID, n_photons * sizeof(uint32_t));
-  if (malloc_err) std::cout<<"Error allocating d_cell_ID"<<std::endl;
-  auto copy_err = cudaMemcpy(d_cell_ID, cpu_photons.cell_ID.data(), n_photons * sizeof(uint32_t), cudaMemcpyHostToDevice);
-  if (copy_err) std::cout<<"Error copying d_cell_ID"<<std::endl;
-
-  uint32_t* d_group;
-  malloc_err = cudaMalloc((void**)&d_group, n_photons * sizeof(uint32_t));
-  if (malloc_err) std::cout<<"Error allocating d_group"<<std::endl;
-  copy_err = cudaMemcpy(d_group, cpu_photons.group.data(), n_photons * sizeof(uint32_t), cudaMemcpyHostToDevice);
-  if (copy_err) std::cout<<"Error copying d_group"<<std::endl;
-
-  unsigned char* d_descriptors;
-  malloc_err = cudaMalloc((void**)&d_descriptors, n_photons * sizeof(unsigned char));
-  if (malloc_err) std::cout<<"Error allocating d_descriptors"<<std::endl;
-  copy_err = cudaMemcpy(d_descriptors, cpu_photons.descriptors.data(), n_photons * sizeof(unsigned char), cudaMemcpyHostToDevice);
-  if (copy_err) std::cout<<"Error copying d_decsriptors"<<std::endl;
-
-  std::array<double, 3>* d_pos;
-  malloc_err = cudaMalloc((void**)&d_pos, n_photons * sizeof(std::array<double, 3>));
-  if (malloc_err) std::cout<<"Error allocating d_pos"<<std::endl;
-  copy_err = cudaMemcpy(d_pos, cpu_photons.pos.data(), n_photons * sizeof(std::array<double, 3>), cudaMemcpyHostToDevice);
-  if (copy_err) std::cout<<"Error copying d_pos"<<std::endl;
-
-  std::array<double, 3>* d_angle;
-  malloc_err = cudaMalloc((void**)&d_angle, n_photons * sizeof(std::array<double, 3>));
-  if (malloc_err) std::cout<<"Error allocating d_angle"<<std::endl;
-  copy_err = cudaMemcpy(d_angle, cpu_photons.angle.data(), n_photons * sizeof(std::array<double, 3>), cudaMemcpyHostToDevice);
-  if (copy_err) std::cout<<"Error copying d_angle"<<std::endl;
-
-  double* d_E;
-  malloc_err = cudaMalloc((void**)&d_E, n_photons * sizeof(double));
-  if (malloc_err) std::cout<<"Error allocating d_E"<<std::endl;
-  copy_err = cudaMemcpy(d_E, cpu_photons.E.data(), n_photons * sizeof(double), cudaMemcpyHostToDevice);
-  if (copy_err) std::cout<<"Error copying d_E"<<std::endl;
-
-  double* d_E0;
-  malloc_err = cudaMalloc((void**)&d_E0, n_photons * sizeof(double));
-  if (malloc_err) std::cout<<"Error allocating d_E0"<<std::endl;
-  copy_err = cudaMemcpy(d_E0, cpu_photons.E0.data(), n_photons * sizeof(double), cudaMemcpyHostToDevice);
-  if (copy_err) std::cout<<"Error copying d_E0"<<std::endl;
-
-  double* d_life_dx;
-  malloc_err = cudaMalloc((void**)&d_life_dx, n_photons * sizeof(double));
-  if (malloc_err) std::cout<<"Error allocating d_life_dx"<<std::endl;
-  copy_err = cudaMemcpy(d_life_dx, cpu_photons.life_dx.data(), n_photons * sizeof(double), cudaMemcpyHostToDevice);
-  if (copy_err) std::cout<<"Error copying d_life_dx"<<std::endl;
-
-  RNG* d_rng;
-  malloc_err = cudaMalloc((void**)&d_rng, n_photons * sizeof(RNG));
-  if (malloc_err) std::cout<<"Error allocating d_rng"<<std::endl;
-  copy_err = cudaMemcpy(d_rng, cpu_photons.rng.data(), n_photons * sizeof(RNG), cudaMemcpyHostToDevice);
-  if (copy_err) std::cout<<"Error copying d_rng"<<std::endl;
-
-  // Allocate and copy cell tallies (zero initialize on device)
-  Cell_Tally *d_cell_tallies_ptr;
-  size_t tallies_size = sizeof(Cell_Tally) * cpu_cell_tallies.size();
-  malloc_err = cudaMalloc((void **)&d_cell_tallies_ptr, tallies_size);
-  Insist(!malloc_err, "CUDA/HIP error allocating cell tallies");
-  copy_err = cudaMemcpy(d_cell_tallies_ptr, cpu_cell_tallies.data(), cpu_cell_tallies.size()* sizeof(Cell_Tally), cudaMemcpyHostToDevice);
-  Insist(!copy_err, "CUDA/HIP error copying cell tallies");
-
-  // Kernel settings
-  int n_threads = Constants::n_threads_per_block;
-  int n_blocks = (n_photons + n_threads - 1) / n_threads;
-
-  // Launch kernel
-  t_transport.start_timer("soa kernel");
-  gpu_history_transport_soa_kernel<<<n_blocks, n_threads>>>(
-      rank_cell_offset, d_cell_ID, d_group, d_descriptors, d_pos, d_angle,
-      d_E, d_E0, d_life_dx, d_rng,
-      device_cells_ptr, d_cell_tallies_ptr, n_photons);
-
-  auto kernel_err = cudaGetLastError();
-  Insist(!kernel_err, "CUDA/HIP error in history SoA kernel launch");
-  auto sync_err = cudaDeviceSynchronize();
-  t_transport.stop_timer("soa kernel");
-  Insist(!sync_err, "CUDA/HIP error synchronizing after history SoA kernel");
-
-  // Copy SoA data back to host
-  copy_err = cudaMemcpy(cpu_photons.cell_ID.data(), d_cell_ID, n_photons * sizeof(uint32_t), cudaMemcpyDeviceToHost);
-  Insist(!copy_err, "Error in copying d_cell_ID");
-  copy_err = cudaMemcpy(cpu_photons.group.data(), d_group, n_photons * sizeof(uint32_t), cudaMemcpyDeviceToHost);
-  Insist(!copy_err, "Error in copying d_group");
-  copy_err = cudaMemcpy(cpu_photons.descriptors.data(), d_descriptors, n_photons * sizeof(unsigned char), cudaMemcpyDeviceToHost);
-  Insist(!copy_err, "Error in copying d_descriptors");
-  copy_err = cudaMemcpy(cpu_photons.pos.data(), d_pos, n_photons * sizeof(std::array<double, 3>), cudaMemcpyDeviceToHost);
-  Insist(!copy_err, "Error in copying d_pos");
-  copy_err = cudaMemcpy(cpu_photons.angle.data(), d_angle, n_photons * sizeof(std::array<double, 3>), cudaMemcpyDeviceToHost);
-  Insist(!copy_err, "Error in copying d_angle");
-  copy_err = cudaMemcpy(cpu_photons.E.data(), d_E, n_photons * sizeof(double), cudaMemcpyDeviceToHost);
-  Insist(!copy_err, "Error in copying d_E");
-  copy_err = cudaMemcpy(cpu_photons.life_dx.data(), d_life_dx, n_photons * sizeof(double), cudaMemcpyDeviceToHost);
-  Insist(!copy_err, "Error in copying d_life_dx");
-  copy_err = cudaMemcpy(cpu_photons.rng.data(), d_rng, n_photons * sizeof(RNG), cudaMemcpyDeviceToHost);
-  Insist(!copy_err, "Error in copying d_rng");
-
-  // Copy cell tallies back to host
-  copy_err = cudaMemcpy(cpu_cell_tallies.data(), d_cell_tallies_ptr, tallies_size, cudaMemcpyDeviceToHost);
-  Insist(!copy_err, "CUDA/HIP error copying cell tallies back to host");
-
-  // Free device memory
-  auto free_err = cudaFree(d_cell_ID);
-  if (free_err) std::cout<<"Error freeing d_cell_ID"<<std::endl;
-  free_err = cudaFree(d_group);
-  if (free_err) std::cout<<"Error freeing d_group"<<std::endl;
-  free_err = cudaFree(d_descriptors);
-  if (free_err) std::cout<<"Error freeing d_descriptors"<<std::endl;
-  free_err = cudaFree(d_pos);
-  if (free_err) std::cout<<"Error freeing d_pos"<<std::endl;
-  free_err = cudaFree(d_angle);
-  if (free_err) std::cout<<"Error freeing d_angle"<<std::endl;
-  free_err = cudaFree(d_E);
-  if (free_err) std::cout<<"Error freeing d_E"<<std::endl;
-  free_err = cudaFree(d_E0);
-  if (free_err) std::cout<<"Error freeing d_E0"<<std::endl;
-  free_err = cudaFree(d_life_dx);
-  if (free_err) std::cout<<"Error freeing d_life_dx"<<std::endl;
-  free_err = cudaFree(d_rng);
-  if (free_err) std::cout<<"Error freeing d_rng"<<std::endl;
-  free_err = cudaFree(d_cell_tallies_ptr);
-  if (free_err) std::cout<<"Error freeing d_cell_tallies_ptr"<<std::endl;
-  t_transport.stop_timer("soa_gpu_transport_photons");
-#else
-  // Provide a fallback or error if CUDA/HIP is not enabled but this function is called
-  std::cerr << "Warning: GPU transport called but CUDA/HIP is not enabled. Running on CPU." << std::endl;
-  // Find number of threads available
-  int n_omp_threads = 1;
-#ifdef USE_OPENMP
-  #pragma omp parallel
-  { n_omp_threads = omp_get_num_threads(); }
-#endif
-  // Need the host cells vector if running on CPU
-  std::vector<Cell> host_cells; // Placeholder - needs actual data if fallback is used
-  history_cpu_transport_photons(rank_cell_offset, cpu_photons, host_cells, cpu_cell_tallies, n_omp_threads);
-#endif
-}
-
 
 #endif // def history_based_transport_h_
 //----------------------------------------------------------------------------//
