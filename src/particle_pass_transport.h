@@ -73,25 +73,28 @@ inline void fill_particle_pass_batch(PhotonArray &batch, const PhotonArray &sour
 template <typename Census_T>
 struct ParticlePassScratch {
   std::vector<std::vector<Photon>> send_list;
-  std::vector<size_t> send_list_offset;
-  std::vector<Cell_Tally> cell_tallies;
-  std::vector<MPI_Request> phtn_recv_request;
-  std::vector<MPI_Request> phtn_send_request;
+  MallocVector<size_t> send_list_offset;
+  MallocVector<Cell_Tally> cell_tallies;
+  MallocVector<MPI_Request> phtn_recv_request;
+  MallocVector<MPI_Request> phtn_send_request;
   std::vector<Buffer<Photon>> phtn_recv_buffer;
   std::vector<Buffer<Photon>> phtn_send_buffer;
   Census_T phtn_recv_list;
   Census_T commed_census_particles;
   std::vector<Photon> aos_batch_photons;
   PhotonArray soa_batch_photons;
-  std::vector<Photon> one_photon;
+  MallocVector<Photon> one_photon;
 
   ParticlePassScratch(const uint32_t n_local_cells, const uint32_t n_adjacent,
                       const uint32_t max_buffer_size, const uint32_t dd_batch_size,
                       const uint64_t particle_capacity)
-      : send_list(n_adjacent), send_list_offset(n_adjacent, 0),
-        cell_tallies(n_local_cells),
-        phtn_recv_request(n_adjacent), phtn_send_request(n_adjacent),
-        phtn_recv_buffer(n_adjacent), phtn_send_buffer(n_adjacent), one_photon(1) {
+      : send_list(n_adjacent), phtn_recv_buffer(n_adjacent), phtn_send_buffer(n_adjacent) {
+    send_list_offset.resize(n_adjacent);
+    std::fill(send_list_offset.begin(), send_list_offset.end(), 0);
+    cell_tallies.resize(n_local_cells);
+    phtn_recv_request.resize(n_adjacent);
+    phtn_send_request.resize(n_adjacent);
+    one_photon.resize(1);
     for (uint32_t i = 0; i < n_adjacent; ++i) {
       send_list[i].reserve(max_buffer_size);
       phtn_recv_buffer[i].resize(max_buffer_size);
