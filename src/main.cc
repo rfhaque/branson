@@ -242,6 +242,21 @@ int main(int argc, char **argv) {
     adiak::fini();
 #endif
 
+#ifdef USE_GPU
+#ifdef USE_UMPIRE
+    const double local_device_memory_high_water_mark =
+      getDeviceMemoryHighWatermark();
+    double min_device_memory_high_water_mark =
+      local_device_memory_high_water_mark;
+    double max_device_memory_high_water_mark =
+      local_device_memory_high_water_mark;
+    MPI_Allreduce(MPI_IN_PLACE, &min_device_memory_high_water_mark, 1,
+                  MPI_DOUBLE, MPI_MIN, MPI_COMM_WORLD);
+    MPI_Allreduce(MPI_IN_PLACE, &max_device_memory_high_water_mark, 1,
+                  MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
+#endif
+#endif
+
     if (mpi_info.get_rank() == 0) {
       cout << "****************************************";
       cout << "****************************************" << endl;
@@ -253,10 +268,15 @@ int main(int argc, char **argv) {
 #ifdef USE_GPU
 #ifdef USE_UMPIRE
       cout<<"Umpire device memory pool size: "<<input.get_umpire_device_pool_size()<<" GB"<<endl;
-      cout<<"Umpire device memory high water mark: "<<getDeviceMemoryHighWatermark()<<" GB"<<endl;
+      cout<<"Umpire device memory high water mark min/max: "
+          <<min_device_memory_high_water_mark<<" / "
+          <<max_device_memory_high_water_mark<<" GB"<<endl;
 #ifdef caliper_FOUND
       adiak::value("umpire_device_pool_size", input.get_umpire_device_pool_size());
-      adiak::value("umpire_device_high_water_mark", getDeviceMemoryHighWatermark());
+      adiak::value("umpire_device_high_water_mark_min",
+                   min_device_memory_high_water_mark);
+      adiak::value("umpire_device_high_water_mark_max",
+                   max_device_memory_high_water_mark);
 #endif
 #endif
 #endif
