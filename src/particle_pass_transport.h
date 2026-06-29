@@ -74,7 +74,7 @@ template <typename Census_T>
 struct ParticlePassScratch {
   std::vector<std::vector<Photon>> send_list;
   MallocVector<size_t> send_list_offset;
-  MallocVector<Cell_Tally> cell_tallies;
+  std::vector<Cell_Tally> cell_tallies;
   MallocVector<MPI_Request> phtn_recv_request;
   MallocVector<MPI_Request> phtn_send_request;
   std::vector<Buffer<Photon>> phtn_recv_buffer;
