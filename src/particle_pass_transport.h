@@ -125,8 +125,7 @@ struct ParticlePassScratch {
 template <typename Census_T>
 void particle_pass_transport(
     const Mesh &mesh, const GPU_Setup<Census_T> &gpu_setup, const IMC_Parameters &imc_parameters, const Info &mpi_info, const MPI_Types &mpi_types,
-    IMC_State &imc_state, Message_Counter &mctr, std::vector<double> &rank_abs_E, std::vector<double> &rank_track_E, Census_T &all_photons,
-    ParticlePassScratch<Census_T> &scratch) {
+    IMC_State &imc_state, Message_Counter &mctr, std::vector<double> &rank_abs_E, std::vector<double> &rank_track_E, Census_T &all_photons, ParticlePassScratch<Census_T> &scratch) {
   using std::vector;
 
   // is the GPU even available?
@@ -168,9 +167,7 @@ void particle_pass_transport(
   MPI_Allreduce(&n_local, &n_global, 1, MPI_UNSIGNED_LONG, MPI_SUM,
                 MPI_COMM_WORLD);
 
-  // get adjacent processor map (off_rank_id -> adjacent_proc_number)
-  auto adjacent_procs = mesh.get_proc_adjacency_list();
-  uint32_t n_adjacent = adjacent_procs.size();
+  // Reset MPI scratch space buffers
   scratch.reset_timestep();
   auto &send_list = scratch.send_list;
   auto &send_list_offset = scratch.send_list_offset;
@@ -179,6 +176,10 @@ void particle_pass_transport(
   // Completion count request made flag
   bool req_made = false;
   int recv_allreduce_flag;
+
+  // get adjacent processor map (off_rank_id -> adjacent_proc_number)
+  auto adjacent_procs = mesh.get_proc_adjacency_list();
+  uint32_t n_adjacent = adjacent_procs.size();
   // messsage requests for photon sends and receives
   MPI_Request *phtn_recv_request = scratch.phtn_recv_request.data();
   MPI_Request *phtn_send_request = scratch.phtn_send_request.data();
