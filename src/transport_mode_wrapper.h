@@ -2,13 +2,24 @@
 #define transport_mode_wrapper_h_
 
 #include "cell_tally.h"
+#include "event_based_transport.h"
 #include "gpu_setup.h"
 #include "mesh.h"
 #include "photon.h"
 #include "photon_array.h"
 #include "post_process_functions.h"
+#include "sampling_functions.h"
 #include "timer.h"
 #include "config.h"
+struct BatchTransportScratch {
+  std::vector<EmissionGroupData> emission_groups;
+  GPUEventHostScratch gpu_event;
+
+  void reserve(const size_t n_local_cells, const size_t max_particles) {
+    emission_groups.reserve(n_local_cells);
+    gpu_event.initial_indices.reserve(max_particles);
+  }
+};
 
 //! Use one of 8 avaialbe transport algorithms in DD or REP: CPU/GPU, EVENT/HISTORY, SoA/AoS
 template <typename Census_T>
@@ -18,7 +29,8 @@ batch_transport(const double next_dt, const bool gpu_available, const GPU_Setup<
                 const uint32_t rank_cell_offset, const Mesh &mesh,
                 Census_T &all_photons,
                 std::vector<std::vector<Photon>> &phtn_send_buffer,
-                std::vector<Cell_Tally> &cell_tallies, Timer &t_transport) {
+                std::vector<Cell_Tally> &cell_tallies, Timer &t_transport,
+                BatchTransportScratch *scratch = nullptr) {
   auto transport_algorithm = imc_parameters.get_transport_algorithm();
   auto n_omp_threads = imc_parameters.get_n_omp_threads();
   uint64_t n_complete = 0;
@@ -55,20 +67,21 @@ batch_transport(const double next_dt, const bool gpu_available, const GPU_Setup<
   } // HISTORY
   else if (transport_algorithm == Constants::EVENT) {
     algorithm = "event";
-    // Precompute emission group data for event-based transport (both CPU and GPU)
-    std::vector<EmissionGroupData> emission_groups;
-    if (transport_algorithm == Constants::EVENT) {
-      emission_groups.resize(mesh.get_n_local_cells());
-      for (size_t i = 0; i < mesh.get_n_local_cells(); ++i) {
-        emission_groups[i] = precompute_emission_group_data(mesh.get_cells()[i]);
-      }
+    std::vector<EmissionGroupData> local_emission_groups;
+    auto *emission_groups_ptr =
+        scratch != nullptr ? &scratch->emission_groups : &local_emission_groups;
+    auto &emission_groups = *emission_groups_ptr;
+    emission_groups.resize(mesh.get_n_local_cells());
+    for (size_t i = 0; i < mesh.get_n_local_cells(); ++i) {
+      emission_groups[i] = precompute_emission_group_data(mesh.get_cells()[i]);
     }
     // EVENT: GPU
     if (gpu_setup.use_gpu_transporter() && gpu_available) {
 #ifdef USE_GPU
       // Call the correct overloaded gpu_event_transport_photons based on Census_T
       gpu_event_transport_photons(rank_cell_offset, all_photons, gpu_setup.get_device_cells_ptr(),
-                                  cell_tallies, emission_groups);
+                                  cell_tallies, emission_groups,
+                                  scratch != nullptr ? &scratch->gpu_event : nullptr);
       auto [batch_complete, batch_exit_E, batch_census_E] =
           post_process_photons(next_dt, all_photons, mesh, phtn_send_buffer);
 

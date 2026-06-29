@@ -58,6 +58,15 @@ struct PhotonTrackingData {
   bool exited_vacuum;
 };
 
+struct GPUEventHostScratch {
+  MallocVector<uint32_t> initial_indices;
+
+  void resize_initial_indices(const uint32_t count) {
+    initial_indices.resize(count);
+    std::iota(initial_indices.begin(), initial_indices.end(), 0u);
+  }
+};
+
 void save_tracking_data(const std::vector<PhotonTrackingData>& tracking_data,
   const std::string& filename) {
   std::ofstream outfile(filename);
@@ -1123,7 +1132,8 @@ GPU_KERNEL void compact_active_list_kernel_soa(
 void gpu_event_transport_photons(const uint32_t rank_cell_offset,
     PhotonArray &cpu_photons, const Cell *device_cells_ptr,
     std::vector<Cell_Tally> &cpu_cell_tallies,
-    const std::vector<EmissionGroupData>& emission_groups) // Pass host emission data
+    const std::vector<EmissionGroupData>& emission_groups,
+    GPUEventHostScratch *host_scratch = nullptr) // Pass host emission data
 {
   Timer t_transport;
   t_transport.start_timer("soa_gpu_event_transport_photons");
@@ -1215,11 +1225,17 @@ void gpu_event_transport_photons(const uint32_t rank_cell_offset,
   err = cudaMemcpy(d_rng, cpu_photons.rng.data(), n_photons * sizeof(RNG), cudaMemcpyHostToDevice); Insist(!err, "SoA GPU copy failed: rng");
   err = cudaMemcpy(d_cell_tallies, cpu_cell_tallies.data(), n_cells * sizeof(Cell_Tally), cudaMemcpyHostToDevice); Insist(!err, "SoA GPU copy failed: cell_tallies");
   err = cudaMemcpy(d_emission_groups, emission_groups.data(), n_emission_groups * sizeof(EmissionGroupData), cudaMemcpyHostToDevice); Insist(!err, "SoA GPU copy failed: emission_groups");
-  std::vector<uint32_t> h_initial_indices(n_photons);
-  std::iota(h_initial_indices.begin(), h_initial_indices.end(), 0);
-  err = cudaMemcpy(d_active_indices_1, h_initial_indices.data(), sizeof(uint32_t) * n_photons, cudaMemcpyHostToDevice); Insist(!err, "GPU SoA Memcpy H2D: d_active_indices_1");
-  std::vector<unsigned int> h_zero_counters(NUM_EVENT_TYPES, 0);
-  err = cudaMemcpy(d_event_counters, h_zero_counters.data(), sizeof(unsigned int) * NUM_EVENT_TYPES, cudaMemcpyHostToDevice); Insist(!err, "GPU SoA Memcpy H2D: d_event_counters");
+  GPUEventHostScratch local_host_scratch;
+  auto &gpu_host_scratch =
+      host_scratch != nullptr ? *host_scratch : local_host_scratch;
+  gpu_host_scratch.resize_initial_indices(n_photons);
+  err = cudaMemcpy(d_active_indices_1, gpu_host_scratch.initial_indices.data(),
+                   sizeof(uint32_t) * n_photons, cudaMemcpyHostToDevice);
+  Insist(!err, "GPU SoA Memcpy H2D: d_active_indices_1");
+  std::array<unsigned int, NUM_EVENT_TYPES> h_zero_counters{};
+  err = cudaMemcpy(d_event_counters, h_zero_counters.data(),
+                   sizeof(unsigned int) * NUM_EVENT_TYPES, cudaMemcpyHostToDevice);
+  Insist(!err, "GPU SoA Memcpy H2D: d_event_counters");
 
 
   // --- Event Loop ---
@@ -1633,7 +1649,8 @@ __global__ void compact_active_list_kernel_aos(
 void gpu_event_transport_photons(const uint32_t rank_cell_offset,
     std::vector<Photon> &cpu_photons, const Cell *device_cells_ptr,
     std::vector<Cell_Tally> &cpu_cell_tallies,
-    const std::vector<EmissionGroupData>& emission_groups)
+    const std::vector<EmissionGroupData>& emission_groups,
+    GPUEventHostScratch *host_scratch = nullptr)
 {
   Timer t_transport;
   t_transport.start_timer("aos_gpu_event_transport_photons");
@@ -1674,11 +1691,15 @@ void gpu_event_transport_photons(const uint32_t rank_cell_offset,
   err = cudaMemcpy(d_emission_groups, emission_groups.data(), sizeof(EmissionGroupData) * n_emission_groups, cudaMemcpyHostToDevice); Insist(!err, "GPU AoS Memcpy H2D: d_emission_groups");
 
   // Active Indices (initialize with 0, 1, ..., n_photons-1 on host first)
-  std::vector<uint32_t> h_initial_indices(n_photons);
-  std::iota(h_initial_indices.begin(), h_initial_indices.end(), 0);
+  GPUEventHostScratch local_host_scratch;
+  auto &gpu_host_scratch =
+      host_scratch != nullptr ? *host_scratch : local_host_scratch;
+  gpu_host_scratch.resize_initial_indices(n_photons);
   err = cudaMalloc((void **)&d_active_indices_1, sizeof(uint32_t) * n_photons); Insist(!err, "GPU AoS Malloc: d_active_indices_1");
   err = cudaMalloc((void **)&d_active_indices_2, sizeof(uint32_t) * n_photons); Insist(!err, "GPU AoS Malloc: d_active_indices_2");
-  err = cudaMemcpy(d_active_indices_1, h_initial_indices.data(), sizeof(uint32_t) * n_photons, cudaMemcpyHostToDevice); Insist(!err, "GPU AoS Memcpy H2D: d_active_indices_1");
+  err = cudaMemcpy(d_active_indices_1, gpu_host_scratch.initial_indices.data(),
+                   sizeof(uint32_t) * n_photons, cudaMemcpyHostToDevice);
+  Insist(!err, "GPU AoS Memcpy H2D: d_active_indices_1");
 
   // Intermediate Event Data
   err = cudaMalloc((void **)&d_event_types_1, sizeof(GPUEventType) * n_photons); Insist(!err, "GPU AoS Malloc: d_event_types_1");
@@ -1688,7 +1709,7 @@ void gpu_event_transport_photons(const uint32_t rank_cell_offset,
 
   // Event Counters (host init to 0, then copy)
   const int NUM_EVENT_TYPES = 4; // Scatter, Boundary, Census, Kill
-  std::vector<unsigned int> h_zero_counters(NUM_EVENT_TYPES, 0);
+  std::array<unsigned int, NUM_EVENT_TYPES> h_zero_counters{};
   err = cudaMalloc((void **)&d_event_counters, sizeof(unsigned int) * NUM_EVENT_TYPES); Insist(!err, "GPU AoS Malloc: d_event_counters");
   err = cudaMemcpy(d_event_counters, h_zero_counters.data(), sizeof(unsigned int) * NUM_EVENT_TYPES, cudaMemcpyHostToDevice); Insist(!err, "GPU AoS Memcpy H2D: d_event_counters");
   err = cudaMalloc((void **)&d_next_active_count_atomic, sizeof(unsigned int)); Insist(!err, "GPU AoS Malloc: d_next_active_count_atomic");
@@ -1742,7 +1763,7 @@ void gpu_event_transport_photons(const uint32_t rank_cell_offset,
     err = cudaGetLastError(); Insist(!err, "GPU AoS Kernel Launch Error: partition_photons");
 
     // 5. Get event counts (copy counters back to host)
-    std::vector<unsigned int> h_event_counts(NUM_EVENT_TYPES);
+    std::array<unsigned int, NUM_EVENT_TYPES> h_event_counts{};
     err = cudaMemcpy(h_event_counts.data(), d_event_counters, sizeof(unsigned int) * NUM_EVENT_TYPES, cudaMemcpyDeviceToHost);
     Insist(!err, "GPU AoS Memcpy D2H Error: d_event_counters");
     uint32_t scatter_count = h_event_counts[0];
