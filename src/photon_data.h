@@ -50,10 +50,9 @@ public:
     auto n_photons = photons.size();
     if constexpr (std::is_same_v<Census_T, std::vector<Photon>>) {
       // Allocate and copy photons
-      Photon *device_photons_ptr;
-      auto alloc_err = cudaMalloc((void **)&device_photons_ptr, sizeof(Photon) * n_photons);
+      auto alloc_err = cudaMalloc((void **)&photon_ptr, sizeof(Photon) * n_photons);
       Insist(!alloc_err, "CUDA/HIP error allocating photons");
-      auto copy_err = cudaMemcpy(device_photons_ptr, photons.data(), sizeof(Photon) * n_photons, cudaMemcpyHostToDevice);
+      auto copy_err = cudaMemcpy(photon_ptr, photons.data(), sizeof(Photon) * n_photons, cudaMemcpyHostToDevice);
       Insist(!copy_err, "CUDA/HIP error copying photons to device");
     } else {
       // Allocate SoA data on GPU

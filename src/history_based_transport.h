@@ -740,7 +740,7 @@ void gpu_transport_photons(const uint32_t rank_cell_offset,
   if constexpr (std::is_same_v<Census_T, std::vector<Photon>>) {
     // Launch kernel
     gpu_history_transport_aos_kernel<<<n_blocks, n_threads>>>(
-        rank_cell_offset, photon_data.photon_ptr, gpu_setup.get_device_cells_ptr(), gpu_setup.get_device_cell_tallies_ptr(), n_batch_photons);
+        rank_cell_offset, photon_data.photon_ptr + batch_start, gpu_setup.get_device_cells_ptr(), gpu_setup.get_device_cell_tallies_ptr(), n_batch_photons);
   }
   else {
     // set pointers for this batch
