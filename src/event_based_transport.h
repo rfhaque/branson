@@ -1690,11 +1690,9 @@ void gpu_event_transport_photons(const uint32_t rank_cell_offset,
 
     } // End while(current_active_count > 0)
 
-    std::cout<<"finished while"<<std::endl;
     auto sync_err = cudaDeviceSynchronize();
     t_transport.stop_timer("soa kernel");
     Insist(!sync_err, "error in synchronize");
-    std::cout<<"finished while post sync"<<std::endl;
 
     // --- Free GPU Memory ---
     auto free_err = cudaFree(d_active_indices_1);
