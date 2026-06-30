@@ -333,12 +333,13 @@ void cpu_event_transport_photons(const uint32_t rank_cell_offset,
   PhotonArray& photon_array, size_t batch_start, size_t batch_end, GPU_Setup<PhotonArray> &gpu_setup,
   int /*n_omp_threads*/ ) // n_omp_threads currently unused in this fine-grained version
 {
-  const size_t maxPhotons = photon_array.size();
+  // ARL: NOTE, need to use batch start and end in CPU event-based loops
+  const size_t maxPhotons = batch_end - batch_start;
   if (maxPhotons == 0) return;
 
   // Tracking data is specific to this CPU implementation
-  std::vector<PhotonTrackingData> tracking_data(maxPhotons);
-  for (size_t i = 0; i < maxPhotons; ++i) {
+  std::vector<PhotonTrackingData> tracking_data(photon_array.size());
+  for (size_t i = batch_start; i < batch_end; ++i) {
     tracking_data[i].initial_angle_x = photon_array.angle[i][0];
     tracking_data[i].final_angle_x = photon_array.angle[i][0];
     tracking_data[i].time_in_cell = 0.0;
@@ -360,10 +361,10 @@ void cpu_event_transport_photons(const uint32_t rank_cell_offset,
     total_sigma_s(maxPhotons);
 
   // Initialize active photons list with original indices 0 to N-1
-  std::iota(active_photons_indices.begin(), active_photons_indices.end(), 0);
+  std::iota(active_photons_indices.begin(), active_photons_indices.end(), batch_start);
   size_t active_count = maxPhotons;
 
-  const Cell* cells_ptr = gpu_setup.get_device_cells_ptr(); // CPU pointer here
+  const Cell* cells_ptr = gpu_setup.get_host_cells_ptr(); // CPU pointer here
   Cell_Tally* tallies_ptr = gpu_setup.get_device_cell_tallies_ptr(); // CPU pointer here
 
   while (active_count > 0) {
@@ -416,7 +417,7 @@ void cpu_event_transport_photons(const uint32_t rank_cell_offset,
         std::vector<double> subset_total_sigma_s(scatter_count);
         std::vector<uint32_t> subset_local_indices(scatter_count);
         // Find the mapping
-        std::vector<size_t> active_to_subset_map(maxPhotons, maxPhotons); // Map original index to position in active list
+        std::vector<size_t> active_to_subset_map(photon_array.size(), photon_array.size()); // Map original index to position in active list
         for(size_t i=0; i<active_count; ++i) active_to_subset_map[active_photons_indices[i]] = i;
 
         for(size_t i=0; i<scatter_count; ++i) {
@@ -689,13 +690,13 @@ void cpu_event_transport_photons(const uint32_t rank_cell_offset, std::vector<Ph
 
   // Tracking data specific to CPU implementation
   std::vector<PhotonTrackingData> tracking_data(photon_array.size());
-   for (size_t i = 0; i < maxPhotons; ++i) {
-    tracking_data[batch_start + i].initial_angle_x = photon_array[batch_start + i].get_angle()[0];
-    tracking_data[batch_start + i].final_angle_x = photon_array[batch_start + i].get_angle()[0]; // Initialize
-    tracking_data[batch_start + i].time_in_cell = 0.0;
-    tracking_data[batch_start + i].num_interactions = 0;
-    tracking_data[batch_start + i].entered_domain = (photon_array[batch_start+i].get_angle()[0] > 0); // Example condition
-    tracking_data[batch_start + i].exited_vacuum = false;
+   for (size_t i = batch_start; i < batch_end; ++i) {
+    tracking_data[i].initial_angle_x = photon_array[i].get_angle()[0];
+    tracking_data[i].final_angle_x = photon_array[i].get_angle()[0]; // Initialize
+    tracking_data[i].time_in_cell = 0.0;
+    tracking_data[i].num_interactions = 0;
+    tracking_data[i].entered_domain = (photon_array[i].get_angle()[0] > 0); // Example condition
+    tracking_data[i].exited_vacuum = false;
   }
 
   std::vector<size_t> scatter_indices(maxPhotons), boundary_indices(maxPhotons), census_indices(maxPhotons), killed_indices(maxPhotons), active_photons_indices(maxPhotons);
@@ -706,7 +707,7 @@ void cpu_event_transport_photons(const uint32_t rank_cell_offset, std::vector<Ph
   std::iota(active_photons_indices.begin(), active_photons_indices.end(), batch_start);
   size_t active_count = maxPhotons;
 
-  const Cell* cells_ptr = gpu_setup.get_device_cells_ptr(); // CPU pointer here
+  const Cell* cells_ptr = gpu_setup.get_host_cells_ptr(); // CPU pointer here
   Cell_Tally* tallies_ptr = gpu_setup.get_device_cell_tallies_ptr(); // CPU pointer here
 
   while (active_count > 0) {
@@ -739,7 +740,7 @@ void cpu_event_transport_photons(const uint32_t rank_cell_offset, std::vector<Ph
         std::vector<double> subset_sigma_s(scatter_count);
         std::vector<double> subset_total_sigma_s(scatter_count);
         std::vector<uint32_t> subset_local_indices(scatter_count);
-        std::vector<size_t> active_to_subset_map(maxPhotons, maxPhotons);
+        std::vector<size_t> active_to_subset_map(photon_array.size(), photon_array.size());
         for(size_t i=0; i<active_count; ++i) active_to_subset_map[active_photons_indices[i]] = i;
         for(size_t i=0; i<scatter_count; ++i) {
             size_t original_index = scatter_indices[i];
@@ -1388,7 +1389,7 @@ void gpu_event_transport_photons(const uint32_t rank_cell_offset,
 
     // Active Indices (initialize with 0, 1, ..., n_photons-1 on host first)
     std::vector<uint32_t> h_initial_indices(n_photons);
-    std::iota(h_initial_indices.begin(), h_initial_indices.end(), 0);
+    std::iota(h_initial_indices.begin(), h_initial_indices.end(), batch_start);
     err = cudaMalloc((void **)&d_active_indices_1, sizeof(uint32_t) * n_photons); Insist(!err, "GPU AoS Malloc: d_active_indices_1");
     err = cudaMalloc((void **)&d_active_indices_2, sizeof(uint32_t) * n_photons); Insist(!err, "GPU AoS Malloc: d_active_indices_2");
     err = cudaMemcpy(d_active_indices_1, h_initial_indices.data(), sizeof(uint32_t) * n_photons, cudaMemcpyHostToDevice); Insist(!err, "GPU AoS Memcpy H2D: d_active_indices_1");
@@ -1582,7 +1583,7 @@ void gpu_event_transport_photons(const uint32_t rank_cell_offset,
 
     // --- Copy Initial Data H2D ---
     std::vector<uint32_t> h_initial_indices(n_photons);
-    std::iota(h_initial_indices.begin(), h_initial_indices.end(), 0);
+    std::iota(h_initial_indices.begin(), h_initial_indices.end(), batch_start);
     err = cudaMemcpy(d_active_indices_1, h_initial_indices.data(), sizeof(uint32_t) * n_photons, cudaMemcpyHostToDevice); Insist(!err, "GPU SoA Memcpy H2D: d_active_indices_1");
     std::vector<unsigned int> h_zero_counters(NUM_EVENT_TYPES, 0);
     err = cudaMemcpy(d_event_counters, h_zero_counters.data(), sizeof(unsigned int) * NUM_EVENT_TYPES, cudaMemcpyHostToDevice); Insist(!err, "GPU SoA Memcpy H2D: d_event_counters");
@@ -1728,7 +1729,7 @@ void gpu_event_transport_photons(const uint32_t rank_cell_offset,
     if (free_err) std::cout<<"Error freeing d_next_avtive_count_atomic"<<std::endl;
     free_err = cudaFree(d_local_cell_indices);
     if (free_err) std::cout<<"Error freeing d_local_cell_indices"<<std::endl;
-    std::cout<<"about to exit event transport loop"<<std::endl;
+    //std::cout<<"about to exit event transport loop"<<std::endl;
     t_transport.stop_timer("soa_gpu_event_transport_photons");
   }
 }

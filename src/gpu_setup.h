@@ -23,7 +23,7 @@ class GPU_Setup {
 public:
   //! Constructor
   GPU_Setup(const int rank, const int n_ranks, const bool use_gpu_transporter, const std::vector<Cell> &cpu_cells, uint64_t n_user_photons)
-    : m_use_gpu_transporter(use_gpu_transporter), device_cells_ptr(nullptr), n_cells(cpu_cells.size())
+    : cells(cpu_cells), host_cells_ptr(cpu_cells.data()), m_use_gpu_transporter(use_gpu_transporter), device_cells_ptr(nullptr), n_cells(cpu_cells.size())
   {
       // Precompute emission group data for event-based transport (both CPU and GPU)
       emission_groups.resize(n_cells);
@@ -47,7 +47,6 @@ public:
       Insist(!copy_err, "CUDA/HIP error in copying cells data");
 
       // Allocate and copy cell tallies (zero initialize on device)
-      Cell_Tally *d_cell_tallies;
       malloc_err = cudaMalloc((void **)&d_cell_tallies, sizeof(Cell_Tally) * cell_tallies.size());
       Insist(!malloc_err, "CUDA/HIP error allocating cell tallies");
       copy_err = cudaMemcpy(d_cell_tallies, cell_tallies.data(), cell_tallies.size()* sizeof(Cell_Tally), cudaMemcpyHostToDevice);
@@ -59,7 +58,11 @@ public:
       copy_err = cudaMemcpy(d_emission_groups, emission_groups.data(), sizeof(EmissionGroupData) * n_cells, cudaMemcpyHostToDevice);
       Insist(!copy_err, "CUDA/HIP error copying emission groups");
     }
+#else
+    d_emission_groups = emission_groups.data();
+    d_cell_tallies = cell_tallies.data();
 #endif
+
     if constexpr (std::is_same_v<Census_T, std::vector<Photon>>) {
       census_photons.reserve(n_user_photons);
     } else {
@@ -94,6 +97,7 @@ public:
   }
 
   Census_T & get_census_photons() {return census_photons;}
+  Cell const * const get_host_cells_ptr() const {return host_cells_ptr;}
   Cell *get_device_cells_ptr() const {return device_cells_ptr;}
   bool use_gpu_transporter() const {return m_use_gpu_transporter;}
   EmissionGroupData * get_emission_groups_ptr() const {return d_emission_groups;}
@@ -136,6 +140,8 @@ void set_device_ID(const int rank, const int n_ranks) {
 #endif
 }
 
+  const std::vector<Cell> &cells;
+  Cell const * const host_cells_ptr;
   bool m_use_gpu_transporter;
   Cell *device_cells_ptr;
   size_t n_cells;

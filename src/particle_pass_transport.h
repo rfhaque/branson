@@ -166,6 +166,7 @@ void particle_pass_transport(
       if (batch_start != batch_end) {
         if (batch_end == all_photons.size()) {
           local_work_done = true;
+          std::cout<<"rank "<<rank<<" done with local: "<<all_photons.size()<<std::endl;
         }
         auto [batch_complete, batch_exit_E, batch_census_E] = batch_transport(next_dt, gpu_available, gpu_setup, imc_parameters, rank_cell_offset, mesh, cpu_photon_data, batch_start, batch_end, send_list, t_transport);
         n_complete += batch_complete;
@@ -236,6 +237,7 @@ void particle_pass_transport(
     } // end loop over adjacent processors
 
     if(!phtn_recv_list.empty()) {
+      //std::cout<<"running recv list with: "<<phtn_recv_list.size()<<std::endl;
       Photon_Data recv_photon_data(phtn_recv_list);
       auto [batch_complete, batch_exit_E, batch_census_E] = batch_transport(next_dt, gpu_available, gpu_setup, imc_parameters, rank_cell_offset, mesh, recv_photon_data, static_cast<size_t>(0), phtn_recv_list.size(), send_list, t_transport);
       n_complete += batch_complete;

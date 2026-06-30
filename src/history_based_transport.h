@@ -598,7 +598,7 @@ void transport_photon_history_soa_gpu(const uint32_t rank_cell_offset,
 void history_cpu_transport_photons(const uint32_t rank_cell_offset,
     std::vector<Photon> &photons, size_t batch_start, size_t batch_end, GPU_Setup<std::vector<Photon>> &gpu_setup, int n_omp_threads) {
 
-  auto cpu_cells_ptr{gpu_setup.get_device_cells_ptr()}; // CPU data here
+  auto cpu_cells_ptr{gpu_setup.get_host_cells_ptr()}; // CPU data here
   auto cpu_tallies_ptr{gpu_setup.get_device_cell_tallies_ptr()}; // CPU data here
   const auto n_cells = gpu_setup.get_n_cells();
 
@@ -636,10 +636,9 @@ void history_cpu_transport_photons(const uint32_t rank_cell_offset,
     PhotonArray &photons, size_t batch_start, size_t batch_end, GPU_Setup<PhotonArray> &gpu_setup,
     int n_omp_threads) {
 
-  auto cpu_cells_ptr{gpu_setup.get_device_cells_ptr()}; // CPU data here
+  auto cpu_cells_ptr{gpu_setup.get_host_cells_ptr()}; // CPU data here
   auto cpu_tallies_ptr{gpu_setup.get_device_cell_tallies_ptr()}; // CPU data here
   const auto n_cells = gpu_setup.get_n_cells();
-  const size_t n_photons = photons.size();
 
 #ifdef USE_OPENMP
   std::vector<std::vector<Cell_Tally>> thread_tallies(n_omp_threads);
@@ -778,7 +777,7 @@ void gpu_transport_photons(const uint32_t rank_cell_offset,
 #endif
   // Need the host cells vector if running on CPU
   std::vector<Cell> host_cells; // Placeholder - needs actual data if fallback is used
-  history_cpu_transport_photons(rank_cell_offset, photons.photons, batch_start, batch_end, gpu_setup, n_omp_threads);
+  history_cpu_transport_photons(rank_cell_offset, photon_data.photons, batch_start, batch_end, gpu_setup, n_omp_threads);
 #endif
 }
 
