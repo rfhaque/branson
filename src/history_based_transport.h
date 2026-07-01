@@ -156,19 +156,24 @@ void transport_photon_history_aos_cpu(const uint32_t rank_cell_offset,
 //----------------------------------------------------------------------------//
 //! Transport a photon (SoA) when the mesh is always available - CPU version
 void transport_photon_history_soa_cpu(const uint32_t rank_cell_offset,
-    const size_t i, // index of the photon
-    PhotonArray &phtns, // Pass the whole structure
+    uint32_t &cell_ID,
+    uint32_t &group,
+    unsigned char &descriptor,
+    std::array<double, 3> &pos,
+    std::array<double, 3> &angle,
+    double &E,
+    double E0,
+    double &life_dx,
+    RNG &rng,
     const Cell *cells, Cell_Tally *cell_tallies) {
 
   using Constants::bc_type;
   using Constants::c;
   using std::min;
 
-  RNG &rng = phtns.rng[i];
-
   uint32_t surface_cross = 0;
 
-  uint32_t local_cell_index =  phtns.cell_ID[i] - rank_cell_offset;
+  uint32_t local_cell_index =  cell_ID - rank_cell_offset;
   Cell const * cell = &cells[local_cell_index];
   bool active = true;
 
@@ -177,8 +182,8 @@ void transport_photon_history_soa_cpu(const uint32_t rank_cell_offset,
 
   // transport this photon
   while (active) {
-    const double sigma_s = cell->get_op_s(phtns.group[i]);
-    const double sigma_a = cell->get_op_a(phtns.group[i]);
+    const double sigma_s = cell->get_op_s(group);
+    const double sigma_a = cell->get_op_a(group);
     const double f = cell->get_f();
     const double total_sigma_s = (1.0 - f) * sigma_a + sigma_s;
 
@@ -187,15 +192,15 @@ void transport_photon_history_soa_cpu(const uint32_t rank_cell_offset,
       -log(rng.generate_random_number()) / total_sigma_s : 1.0e100;
 
     const double dist_to_boundary = cell->get_distance_to_boundary(
-        phtns.pos[i], phtns.angle[i], surface_cross);
-    const double dist_to_census = phtns.life_dx[i];
+        pos, angle, surface_cross);
+    const double dist_to_census = life_dx;
 
     // select minimum distance event
     const double dist_to_event = min(dist_to_scatter, min(dist_to_boundary, dist_to_census));
 
     // calculate energy absorbed by material, update photon and material energy
     // and update the path-length weighted tally for T_r
-    const double absorbed_E = phtns.E[i] * (1.0 - exp(-sigma_a * f * dist_to_event));
+    const double absorbed_E = E * (1.0 - exp(-sigma_a * f * dist_to_event));
 
     thread_absorbed_E += absorbed_E;
     // Avoid division by zero if sigma_a or f is zero
@@ -203,40 +208,38 @@ void transport_photon_history_soa_cpu(const uint32_t rank_cell_offset,
         thread_track_E += absorbed_E / (sigma_a * f);
 
 
-    phtns.E[i] = (phtns.E[i] - absorbed_E);
+    E = (E - absorbed_E);
 
     // update position
-    phtns.pos[i][0] += phtns.angle[i][0] * dist_to_event;
-    phtns.pos[i][1] += phtns.angle[i][1] * dist_to_event;
-    phtns.pos[i][2] += phtns.angle[i][2] * dist_to_event;
-    phtns.life_dx[i] -= dist_to_event;
+    pos[0] += angle[0] * dist_to_event;
+    pos[1] += angle[1] * dist_to_event;
+    pos[2] += angle[2] * dist_to_event;
+    life_dx -= dist_to_event;
 
     // apply runtime reduction
-    if (phtns.E[i] / phtns.E0[i] < Constants::cutoff_fraction) {
-      thread_absorbed_E += phtns.E[i];
+    if (E / E0 < Constants::cutoff_fraction) {
+      thread_absorbed_E += E;
       cell_tallies[local_cell_index].accumulate_absorbed_E(thread_absorbed_E);
       cell_tallies[local_cell_index].accumulate_track_E(thread_track_E);
       active = false;
-      phtns.descriptors[i] = static_cast<unsigned char>(Constants::KILLED);
+      descriptor = static_cast<unsigned char>(Constants::KILLED);
     }
     // or apply event
     else {
       // EVENT TYPE: SCATTER
       if (dist_to_event == dist_to_scatter) {
-        phtns.angle[i] = get_uniform_angle(rng);
+        angle = get_uniform_angle(rng);
         if (rng.generate_random_number() > (sigma_s / total_sigma_s)) {
-          phtns.group[i] = sample_emission_group(rng, *cell);
+          group = sample_emission_group(rng, *cell);
           // chance of more intensive scatter
           if (rng.generate_random_number() <= Constants::intensive_scatter_fraction) {
-            auto group = phtns.group[i];
             // get a frequency (faux multigroup so just sample from wide spectrum)
             double freq = Constants::lower_frequency_bound + static_cast<double>(group)/static_cast<double>(BRANSON_N_GROUPS)*Constants::delta_frequency_bounds;
-            auto angle = phtns.angle[i];
             auto new_energy_angle = intensive_scatter(cell->get_T_e(), freq, angle, rng);
-            phtns.angle[i] = new_energy_angle.second;
+            angle = new_energy_angle.second;
           }
         }
-        phtns.descriptors[i] = Constants::SCATTER;
+        descriptor = Constants::SCATTER;
       }
       // EVENT TYPE: BOUNDARY CROSS
       else if (dist_to_event == dist_to_boundary) {
@@ -244,33 +247,33 @@ void transport_photon_history_soa_cpu(const uint32_t rank_cell_offset,
         if (boundary_event == Constants::ELEMENT) {
           cell_tallies[local_cell_index].accumulate_absorbed_E(thread_absorbed_E);
           cell_tallies[local_cell_index].accumulate_track_E(thread_track_E);
-          phtns.cell_ID[i] = cell->get_next_cell(surface_cross);
-          local_cell_index =  phtns.cell_ID[i] - rank_cell_offset;
+          cell_ID = cell->get_next_cell(surface_cross);
+          local_cell_index =  cell_ID - rank_cell_offset;
           cell = &cells[local_cell_index];
-          phtns.descriptors[i] = static_cast<unsigned char>(Constants::BOUND);
+          descriptor = static_cast<unsigned char>(Constants::BOUND);
           thread_absorbed_E = 0.0;
           thread_track_E = 0.0;
         } else if (boundary_event == Constants::PROCESSOR) {
           active = false;
-          phtns.cell_ID[i] = cell->get_next_cell(surface_cross);
-          phtns.descriptors[i] = static_cast<unsigned char>(Constants::PASS);
+          cell_ID = cell->get_next_cell(surface_cross);
+          descriptor = static_cast<unsigned char>(Constants::PASS);
           cell_tallies[local_cell_index].accumulate_absorbed_E(thread_absorbed_E);
           cell_tallies[local_cell_index].accumulate_track_E(thread_track_E);
         } else if (boundary_event == Constants::VACUUM || boundary_event == Constants::SOURCE) {
           active = false;
-          phtns.descriptors[i] = static_cast<unsigned char>(Constants::EXIT);
+          descriptor = static_cast<unsigned char>(Constants::EXIT);
           cell_tallies[local_cell_index].accumulate_absorbed_E(thread_absorbed_E);
           cell_tallies[local_cell_index].accumulate_track_E(thread_track_E);
         } else { // REFLECT
           int reflect_angle = surface_cross/2; // X -> 0, Y->1, Z->2
-          phtns.angle[i][reflect_angle] = -phtns.angle[i][reflect_angle];
-          phtns.descriptors[i] = static_cast<unsigned char>(Constants::BOUND);
+          angle[reflect_angle] = -angle[reflect_angle];
+          descriptor = static_cast<unsigned char>(Constants::BOUND);
         }
       }
       // EVENT TYPE: REACH CENSUS
       else if (dist_to_event == dist_to_census) {
         active = false;
-        phtns.descriptors[i] = static_cast<unsigned char>(Constants::CENSUS);
+        descriptor = static_cast<unsigned char>(Constants::CENSUS);
         cell_tallies[local_cell_index].accumulate_absorbed_E(thread_absorbed_E);
         cell_tallies[local_cell_index].accumulate_track_E(thread_track_E);
       }
@@ -596,8 +599,9 @@ void transport_photon_history_soa_gpu(const uint32_t rank_cell_offset,
 
 //! Transport photons using history-based method on CPU (AoS version)
 void history_cpu_transport_photons(const uint32_t rank_cell_offset,
-    std::vector<Photon> &photons, size_t batch_start, size_t batch_end, GPU_Setup<std::vector<Photon>> &gpu_setup, int n_omp_threads) {
+    Photon_Data<std::vector<Photon>> photon_data, size_t batch_start, size_t batch_end, GPU_Setup<std::vector<Photon>> &gpu_setup, int n_omp_threads) {
 
+  Photon *photons = photon_data.h_photon_ptr;
   auto cpu_cells_ptr{gpu_setup.get_host_cells_ptr()}; // CPU data here
   auto cpu_tallies_ptr{gpu_setup.get_device_cell_tallies_ptr()}; // CPU data here
   const auto n_cells = gpu_setup.get_n_cells();
@@ -633,7 +637,7 @@ void history_cpu_transport_photons(const uint32_t rank_cell_offset,
 
 //! Transport photons using history-based method on CPU (SoA version)
 void history_cpu_transport_photons(const uint32_t rank_cell_offset,
-    PhotonArray &photons, size_t batch_start, size_t batch_end, GPU_Setup<PhotonArray> &gpu_setup,
+    Photon_Data<PhotonArray> &photon_data, size_t batch_start, size_t batch_end, GPU_Setup<PhotonArray> &gpu_setup,
     int n_omp_threads) {
 
   auto cpu_cells_ptr{gpu_setup.get_host_cells_ptr()}; // CPU data here
@@ -651,7 +655,17 @@ void history_cpu_transport_photons(const uint32_t rank_cell_offset,
 #pragma omp for schedule(guided)
     for (size_t i=batch_start; i<batch_end; ++i) {
       // Call the CPU version
-      transport_photon_history_soa_cpu(rank_cell_offset, i, photons, cpu_cells_ptr, thread_tally_ptr);
+      transport_photon_history_soa_cpu(rank_cell_offset,
+        photon_data.h_cell_ID_ptr[i],
+        photon_data.h_group_ptr[i],
+        phtoon_data.h_descriptors_ptr[i],
+        photon_data.h_pos_ptr[i],
+        photon_data.h_angle_ptr[i],
+        photon_data.h_E_ptr[i],
+        photon_data.h_E0_ptr[i],
+        photon_data.h_life_dx_ptr[i],
+        photon_data.h_RNG_ptr[i]
+        cpu_cells_ptr, thread_tally_ptr);
     }
   } // end parallel region
 
@@ -664,7 +678,17 @@ void history_cpu_transport_photons(const uint32_t rank_cell_offset,
   // normal serial version
   for (size_t i=batch_start; i<batch_end; ++i) {
     // Call the CPU version
-    transport_photon_history_soa_cpu(rank_cell_offset, i, photons, cpu_cells_ptr, cpu_tallies_ptr);
+      transport_photon_history_soa_cpu(rank_cell_offset,
+        photon_data.h_cell_ID_ptr[i],
+        photon_data.h_group_ptr[i],
+        photon_data.h_descriptors_ptr[i],
+        photon_data.h_pos_ptr[i],
+        photon_data.h_angle_ptr[i],
+        photon_data.h_E_ptr[i],
+        photon_data.h_E0_ptr[i],
+        photon_data.h_life_dx_ptr[i],
+        photon_data.h_RNG_ptr[i],
+        cpu_cells_ptr, cpu_tallies_ptr);
   }
 #endif
 }
@@ -731,7 +755,7 @@ void gpu_transport_photons(const uint32_t rank_cell_offset,
   size_t n_batch_photons = batch_end - batch_start;
   if (n_batch_photons == 0) return; // No work to do
 
-  device_debug_print(n_batch_photons, timer_name);
+  //device_debug_print(n_batch_photons, timer_name);
 
   // Kernel settings
   int n_threads = Constants::n_threads_per_block;
@@ -740,19 +764,19 @@ void gpu_transport_photons(const uint32_t rank_cell_offset,
   if constexpr (std::is_same_v<Census_T, std::vector<Photon>>) {
     // Launch kernel
     gpu_history_transport_aos_kernel<<<n_blocks, n_threads>>>(
-        rank_cell_offset, photon_data.photon_ptr + batch_start, gpu_setup.get_device_cells_ptr(), gpu_setup.get_device_cell_tallies_ptr(), n_batch_photons);
+        rank_cell_offset, photon_data.d_photon_ptr + batch_start, gpu_setup.get_device_cells_ptr(), gpu_setup.get_device_cell_tallies_ptr(), n_batch_photons);
   }
   else {
     // set pointers for this batch
-    uint32_t *d_cell_ID = photon_data.cell_ID_ptr + batch_start;
-    uint32_t *d_group = photon_data.group_ptr + batch_start;
-    unsigned char *d_descriptors = photon_data.descriptors_ptr + batch_start;
-    std::array<double, 3> *d_pos = photon_data.pos_ptr + batch_start;
-    std::array<double, 3> *d_angle = photon_data.angle_ptr + batch_start;
-    double *d_E = photon_data.E_ptr + batch_start;
-    double *d_E0 = photon_data.E0_ptr + batch_start;
-    double *d_life_dx = photon_data.life_dx_ptr + batch_start;
-    RNG *d_RNG = photon_data.RNG_ptr + batch_start;
+    uint32_t *d_cell_ID = photon_data.d_cell_ID_ptr + batch_start;
+    uint32_t *d_group = photon_data.d_group_ptr + batch_start;
+    unsigned char *d_descriptors = photon_data.d_descriptors_ptr + batch_start;
+    std::array<double, 3> *d_pos = photon_data.d_pos_ptr + batch_start;
+    std::array<double, 3> *d_angle = photon_data.d_angle_ptr + batch_start;
+    double *d_E = photon_data.d_E_ptr + batch_start;
+    double *d_E0 = photon_data.d_E0_ptr + batch_start;
+    double *d_life_dx = photon_data.d_life_dx_ptr + batch_start;
+    RNG *d_RNG = photon_data.d_RNG_ptr + batch_start;
 
     gpu_history_transport_soa_kernel<<<n_blocks, n_threads>>>(
         rank_cell_offset, d_cell_ID, d_group, d_descriptors, d_pos, d_angle,
@@ -777,7 +801,7 @@ void gpu_transport_photons(const uint32_t rank_cell_offset,
 #endif
   // Need the host cells vector if running on CPU
   std::vector<Cell> host_cells; // Placeholder - needs actual data if fallback is used
-  history_cpu_transport_photons(rank_cell_offset, photon_data.photons, batch_start, batch_end, gpu_setup, n_omp_threads);
+  history_cpu_transport_photons(rank_cell_offset, photon_data, batch_start, batch_end, gpu_setup, n_omp_threads);
 #endif
 }
 

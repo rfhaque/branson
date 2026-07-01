@@ -41,10 +41,10 @@ batch_transport(const double next_dt, const bool gpu_available, GPU_Setup<Census
     else {
       hardware = "CPU";
       // Call correct overloaded history_cpu_transport_photons
-      history_cpu_transport_photons(rank_cell_offset, photon_data.photons, batch_start, batch_end, gpu_setup, n_omp_threads);
+      history_cpu_transport_photons(rank_cell_offset, photon_data, batch_start, batch_end, gpu_setup, n_omp_threads);
     } // HISTORY: CPU
     auto [batch_complete, batch_exit_E, batch_census_E] =
-        post_process_photons(next_dt, photon_data.photons, batch_start, batch_end, mesh, phtn_send_buffer);
+        post_process_photons(next_dt, photon_data, batch_start, batch_end, mesh, phtn_send_buffer);
     n_complete += batch_complete;
     exit_E += batch_exit_E;
     census_E += batch_census_E;
@@ -58,7 +58,7 @@ batch_transport(const double next_dt, const bool gpu_available, GPU_Setup<Census
       gpu_event_transport_photons(rank_cell_offset, photon_data, batch_start, batch_end, gpu_setup);
       photon_data.sync();
       auto [batch_complete, batch_exit_E, batch_census_E] =
-          post_process_photons(next_dt, photon_data.photons, batch_start, batch_end, mesh, phtn_send_buffer);
+          post_process_photons(next_dt, photon_data, batch_start, batch_end, mesh, phtn_send_buffer);
 
       n_complete += batch_complete;
       exit_E += batch_exit_E;
@@ -77,12 +77,12 @@ batch_transport(const double next_dt, const bool gpu_available, GPU_Setup<Census
            event_batch_start += event_batch_size) {
         size_t event_batch_end = std::min(event_batch_start + event_batch_size, batch_end);
         //std::cout << "batch: event_batch_start: " << event_batch_start << " event_batch_end: "<<event_batch_end<<std::endl;
-        cpu_event_transport_photons(rank_cell_offset, photon_data.photons, event_batch_start, event_batch_end, gpu_setup,
+        cpu_event_transport_photons(rank_cell_offset, photon_data, event_batch_start, event_batch_end, gpu_setup,
                                     n_omp_threads);
       }
       //std::cout<<"batches done, postprocessing..."<<std::endl;
       auto [batch_complete, batch_exit_E, batch_census_E] =
-          post_process_photons(next_dt, photon_data.photons, batch_start, batch_end, mesh, phtn_send_buffer);
+          post_process_photons(next_dt, photon_data, batch_start, batch_end, mesh, phtn_send_buffer);
       n_complete += batch_complete;
       exit_E += batch_exit_E;
       census_E += batch_census_E;

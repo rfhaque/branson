@@ -38,7 +38,7 @@
 template <typename Census_T>
 void particle_pass_transport(
     const Mesh &mesh, GPU_Setup<Census_T> &gpu_setup, const IMC_Parameters &imc_parameters, const Info &mpi_info, const MPI_Types &mpi_types,
-    IMC_State &imc_state, Message_Counter &mctr, std::vector<double> &rank_abs_E, std::vector<double> &rank_track_E, Census_T &all_photons) {
+    IMC_State &imc_state, Message_Counter &mctr, std::vector<double> &rank_abs_E, std::vector<double> &rank_track_E, Census_T &all_photons, Census_T &dummy_comm_photons) {
   using std::vector;
 
   // is the GPU even available?
@@ -125,6 +125,7 @@ void particle_pass_transport(
 
   // copies photons to device
   Photon_Data photon_data(all_photons);
+  Photon_Data comm_photon_data(dummy_comm_photons);
 
   Census_T phtn_recv_list; //!< Photons from received messages
 
@@ -143,7 +144,6 @@ void particle_pass_transport(
     exit_E += batch_exit_E;
     census_E += batch_census_E;
     local_work_done = true;
-
     // condense census right now?
   }
 
@@ -166,7 +166,6 @@ void particle_pass_transport(
       if (batch_start != batch_end) {
         if (batch_end == all_photons.size()) {
           local_work_done = true;
-          std::cout<<"rank "<<rank<<" done with local: "<<all_photons.size()<<std::endl;
         }
         auto [batch_complete, batch_exit_E, batch_census_E] = batch_transport(next_dt, gpu_available, gpu_setup, imc_parameters, rank_cell_offset, mesh, cpu_photon_data, batch_start, batch_end, send_list, t_transport);
         n_complete += batch_complete;
@@ -238,8 +237,9 @@ void particle_pass_transport(
 
     if(!phtn_recv_list.empty()) {
       //std::cout<<"running recv list with: "<<phtn_recv_list.size()<<std::endl;
-      Photon_Data recv_photon_data(phtn_recv_list);
-      auto [batch_complete, batch_exit_E, batch_census_E] = batch_transport(next_dt, gpu_available, gpu_setup, imc_parameters, rank_cell_offset, mesh, recv_photon_data, static_cast<size_t>(0), phtn_recv_list.size(), send_list, t_transport);
+      //Photon_Data recv_photon_data(phtn_recv_list);
+      comm_photon_data.reset_without_allocating(phtn_recv_list);
+      auto [batch_complete, batch_exit_E, batch_census_E] = batch_transport(next_dt, gpu_available, gpu_setup, imc_parameters, rank_cell_offset, mesh, comm_photon_data, static_cast<size_t>(0), phtn_recv_list.size(), send_list, t_transport);
       n_complete += batch_complete;
       exit_E += batch_exit_E;
       census_E += batch_census_E;
