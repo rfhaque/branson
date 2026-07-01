@@ -79,35 +79,6 @@ void replicated_transport(const Mesh& mesh, GPU_Setup<Census_T> &gpu_setup, IMC_
   //cout << "\n=== Total Particle Memory Usage ===" << endl;
   //print_memory_footprint(all_photons, std::is_same_v<Census_T, std::vector<Photon>> ? "AoS (vector<Photon>)" : "SoA (PhotonArray)");
 
-  // Print theoretical batch memory calculation once at the start (for CPU event-based)
-  if (imc_parameters.get_transport_algorithm() == Constants::EVENT) {
-      auto event_batch_size = imc_parameters.get_event_batch_size();
-      size_t batch_memory = 0;
-      if constexpr (std::is_same_v<Census_T, std::vector<Photon>>) {
-        batch_memory = event_batch_size * sizeof(Photon);
-        cout << "\n=== AoS CPU Event Batch Memory Estimate ===" << endl;
-      }
-      else if constexpr (std::is_same_v<Census_T, PhotonArray>) {
-        batch_memory =
-          event_batch_size * sizeof(uint32_t) +          // cell_ID vector
-          event_batch_size * sizeof(uint32_t) +          // group vector
-          event_batch_size * sizeof(uint32_t) +          // source_type vector
-          event_batch_size * sizeof(unsigned char) +      // descriptors vector
-          event_batch_size * sizeof(std::array<double, 3>) + // position vector
-          event_batch_size * sizeof(std::array<double, 3>) + // angle vector
-          event_batch_size * sizeof(double) +            // E vector
-          event_batch_size * sizeof(double) +            // E0 vector
-          event_batch_size * sizeof(double) +            // life_dx vector
-          event_batch_size * sizeof(RNG);                // rng vector
-        cout << "\n=== SoA CPU Event Batch Memory Estimate ===" << endl;
-      }
-       if (event_batch_size > 0) {
-            double batch_mb = static_cast<double>(batch_memory) / (1024.0 * 1024.0);
-            cout << "Batch size: " << event_batch_size << " particles" << endl;
-            cout << "Batch memory: " << batch_memory << " bytes (" << batch_mb << " MB)" << endl;
-            cout << "Bytes per particle: " << static_cast<double>(batch_memory) / event_batch_size << endl;
-       }
-  }
 
 
   // is the GPU even available?
@@ -129,6 +100,9 @@ void replicated_transport(const Mesh& mesh, GPU_Setup<Census_T> &gpu_setup, IMC_
     std::cout << " running transport on CPU" << std::endl;
   }
 
+  // copies photons to device
+  Photon_Data photon_data(all_photons);
+
   // timing
   Timer t_transport;
   t_transport.start_timer("timestep transport");
@@ -136,19 +110,13 @@ void replicated_transport(const Mesh& mesh, GPU_Setup<Census_T> &gpu_setup, IMC_
   //------------------------------------------------------------------------//
   // main transport loop
   //------------------------------------------------------------------------//
-  {
-    // copies photons to device
-    Photon_Data photon_data(all_photons);
+  uint32_t rank_cell_offset{ 0 }; // no offset in replicated mesh
+  std::vector<std::vector<Photon>> null_send_list(0); // not used in replicated mode
 
-    uint32_t rank_cell_offset{ 0 }; // no offset in replicated mesh
-    std::vector<std::vector<Photon>> null_send_list(0); // not used in replicated mode
-
-    auto [batch_complete, batch_exit_E, batch_census_E] = batch_transport(next_dt, gpu_available, gpu_setup, imc_parameters, rank_cell_offset, mesh, photon_data, static_cast<size_t>(0), all_photons.size(), null_send_list, t_transport);
-    auto n_complete = batch_complete;
-    census_E += batch_census_E;
-    exit_E += batch_exit_E;
-
-  } // destructor for photon_data free GPU data if allocated
+  auto [batch_complete, batch_exit_E, batch_census_E] = batch_transport(next_dt, gpu_available, gpu_setup, imc_parameters, rank_cell_offset, mesh, photon_data, static_cast<size_t>(0), all_photons.size(), null_send_list, t_transport);
+  auto n_complete = batch_complete;
+  census_E += batch_census_E;
+  exit_E += batch_exit_E;
 
   gpu_setup.sync_cell_tallies();
   const vector<Cell_Tally> &cell_tallies = gpu_setup.get_cell_tallies();

@@ -1275,7 +1275,7 @@ void gpu_event_transport_photons(const uint32_t rank_cell_offset,
   int32_t *d_boundary_indices = photon_data.d_boundary_indices;
   int32_t *d_census_indices = photon_data.d_census_indices;
   double *d_absorbed_E = photon_data.d_absorbed_E;
-  double *d_track_length_E = photon_data.d_absorbed_E;
+  double *d_track_length_E = photon_data.d_track_length_E;
 
   // --- Event Loop ---
   uint32_t current_active_count = n_photons;

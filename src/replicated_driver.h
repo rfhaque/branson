@@ -81,6 +81,38 @@ void imc_replicated_driver(Mesh &mesh, IMC_State &imc_state,
 
     imc_state.print_memory_estimate(rank, n_ranks,  mesh.get_n_local_cells(), all_photons.size());
 
+    // Print theoretical batch memory calculation once at the start (for CPU event-based)
+    if (imc_parameters.get_transport_algorithm() == Constants::EVENT) {
+        if (rank == 0) {
+        auto event_batch_size = imc_parameters.get_event_batch_size();
+        size_t batch_memory = 0;
+        if constexpr (std::is_same_v<Census_T, std::vector<Photon>>) {
+          batch_memory = event_batch_size * sizeof(Photon);
+          std::cout << "\n=== AoS CPU Event Batch Memory Estimate ===" << std::endl;
+        }
+        else if constexpr (std::is_same_v<Census_T, PhotonArray>) {
+          batch_memory =
+            event_batch_size * sizeof(uint32_t) +          // cell_ID vector
+            event_batch_size * sizeof(uint32_t) +          // group vector
+            event_batch_size * sizeof(uint32_t) +          // source_type vector
+            event_batch_size * sizeof(unsigned char) +      // descriptors vector
+            event_batch_size * sizeof(std::array<double, 3>) + // position vector
+            event_batch_size * sizeof(std::array<double, 3>) + // angle vector
+            event_batch_size * sizeof(double) +            // E vector
+            event_batch_size * sizeof(double) +            // E0 vector
+            event_batch_size * sizeof(double) +            // life_dx vector
+            event_batch_size * sizeof(RNG);                // rng vector
+          std::cout << "\n=== SoA CPU Event Batch Memory Estimate ===" << std::endl;
+        }
+         if (event_batch_size > 0) {
+              double batch_mb = static_cast<double>(batch_memory) / (1024.0 * 1024.0);
+              std::cout << "Batch size: " << event_batch_size << " particles" << std::endl;
+              std::cout << "Batch memory: " << batch_memory << " bytes (" << batch_mb << " MB)" << std::endl;
+              std::cout << "Bytes per particle: " << static_cast<double>(batch_memory) / event_batch_size << std::endl;
+         }
+      }
+    }
+
     // add barrier here to make sure the transport timer starts at roughly the same time
     MPI_Barrier(MPI_COMM_WORLD);
 

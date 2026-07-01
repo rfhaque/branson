@@ -61,6 +61,10 @@ void particle_pass_transport(
   double exit_E = 0.0;
   double next_dt = imc_state.get_next_dt(); //! Set for census photons
 
+  // copies photons to device, sets up some buffers used in transport
+  Photon_Data photon_data(all_photons);
+  Photon_Data comm_photon_data(dummy_comm_photons);
+
   // timing
   Timer t_transport;
   t_transport.start_timer("timestep_transport");
@@ -123,9 +127,6 @@ void particle_pass_transport(
   // main transport loop
   //------------------------------------------------------------------------//
 
-  // copies photons to device
-  Photon_Data photon_data(all_photons);
-  Photon_Data comm_photon_data(dummy_comm_photons);
 
   Census_T phtn_recv_list; //!< Photons from received messages
 
