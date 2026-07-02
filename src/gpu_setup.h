@@ -15,6 +15,7 @@
 
 #include "cell.h"
 #include "config.h"
+#include "sampling_functions.h"
 
 template <typename Census_T>
 class GPU_Setup {
@@ -22,22 +23,48 @@ class GPU_Setup {
 public:
   //! Constructor
   GPU_Setup(const int rank, const int n_ranks, const bool use_gpu_transporter, const std::vector<Cell> &cpu_cells, uint64_t n_user_photons)
-    : m_use_gpu_transporter(use_gpu_transporter), device_cells_ptr(nullptr)
+    : cells(cpu_cells), host_cells_ptr(cpu_cells.data()), m_use_gpu_transporter(use_gpu_transporter), device_cells_ptr(nullptr), n_cells(cpu_cells.size())
   {
+      // Precompute emission group data for event-based transport (both CPU and GPU)
+      emission_groups.resize(n_cells);
+      for (size_t i = 0; i < n_cells; ++i) {
+        emission_groups[i] = precompute_emission_group_data(cpu_cells[i]);
+      }
+
+      cell_tallies.resize(n_cells);
+
 #ifdef USE_GPU
     if(m_use_gpu_transporter) {
       // MPI rank to GPU mapping
       set_device_ID(rank, n_ranks);
 
-      std::cout<<"Allocating and transferring "<<cpu_cells.size()<<" cell(s) to the GPU"<<std::endl;
+      if (rank ==0) {
+        std::cout<<"Allocating and transferring "<<cpu_cells.size()<<" cell(s) to the GPU"<<std::endl;
+      }
       // allocate and copy cells
-      cudaError_t err = cudaMalloc((void **)&device_cells_ptr, sizeof(Cell) * cpu_cells.size());
-      Insist(!err, "CUDA/HIP error in allocating cells data");
-      err = cudaMemcpy(device_cells_ptr, cpu_cells.data(), sizeof(Cell) * cpu_cells.size(),
+      auto malloc_err = cudaMalloc((void **)&device_cells_ptr, sizeof(Cell) * cpu_cells.size());
+      Insist(!malloc_err, "CUDA/HIP error in allocating cells data");
+      auto copy_err = cudaMemcpy(device_cells_ptr, cpu_cells.data(), sizeof(Cell) * cpu_cells.size(),
                        cudaMemcpyHostToDevice);
-      Insist(!err, "CUDA/HIP error in copying cells data");
+      Insist(!copy_err, "CUDA/HIP error in copying cells data");
+
+      // Allocate and copy cell tallies (zero initialize on device)
+      malloc_err = cudaMalloc((void **)&d_cell_tallies, sizeof(Cell_Tally) * cell_tallies.size());
+      Insist(!malloc_err, "CUDA/HIP error allocating cell tallies");
+      copy_err = cudaMemcpy(d_cell_tallies, cell_tallies.data(), cell_tallies.size()* sizeof(Cell_Tally), cudaMemcpyHostToDevice);
+      Insist(!copy_err, "CUDA/HIP error copying cell tallies");
+
+      // Allocate and copy emission Groups
+      malloc_err = cudaMalloc((void **)&d_emission_groups, sizeof(EmissionGroupData) * n_cells);
+      Insist(!malloc_err, "CUDA/HIP error allocating emission groups");
+      copy_err = cudaMemcpy(d_emission_groups, emission_groups.data(), sizeof(EmissionGroupData) * n_cells, cudaMemcpyHostToDevice);
+      Insist(!copy_err, "CUDA/HIP error copying emission groups");
     }
+#else
+    d_emission_groups = emission_groups.data();
+    d_cell_tallies = cell_tallies.data();
 #endif
+
     if constexpr (std::is_same_v<Census_T, std::vector<Photon>>) {
       census_photons.reserve(n_user_photons);
     } else {
@@ -64,9 +91,22 @@ public:
 #endif
   }
 
+  void sync_cell_tallies() {
+    #ifdef USE_GPU
+      auto copy_err = cudaMemcpy(cell_tallies.data(), d_cell_tallies, cell_tallies.size()* sizeof(Cell_Tally), cudaMemcpyDeviceToHost);
+      Insist(!copy_err, "CUDA/HIP error copying cell tallies");
+    #endif
+  }
+
   Census_T & get_census_photons() {return census_photons;}
+  Cell const * const get_host_cells_ptr() const {return host_cells_ptr;}
   Cell *get_device_cells_ptr() const {return device_cells_ptr;}
   bool use_gpu_transporter() const {return m_use_gpu_transporter;}
+  EmissionGroupData * get_emission_groups_ptr() const {return d_emission_groups;}
+  const std::vector<EmissionGroupData> & get_emission_groups() const {return emission_groups;}
+  Cell_Tally * get_device_cell_tallies_ptr() const {return d_cell_tallies;}
+  const std::vector<Cell_Tally> & get_cell_tallies() const {return cell_tallies;}
+  size_t get_n_cells() {return n_cells;}
 
 private:
 
@@ -96,15 +136,24 @@ void set_device_ID(const int rank, const int n_ranks) {
   int my_bus_id = 0;
   auto attribute_err = cudaDeviceGetAttribute(&my_bus_id, cudaDevAttrPciBusId, my_device);
   Insist(!attribute_err, "error in device attribute");
-  std::cout << "N devices: " << n_devices << std::endl;
+  if (rank == 0) {
+    std::cout << "N devices: " << n_devices << std::endl;
+  }
   std::cout << "rank: " << rank << ", device: " << my_device << " bus id: ";
   std::cout << my_bus_id << std::endl;
 #endif
 }
 
+  const std::vector<Cell> &cells;
+  Cell const * const host_cells_ptr;
   bool m_use_gpu_transporter;
   Cell *device_cells_ptr;
+  size_t n_cells;
   Census_T census_photons;
+  std::vector<Cell_Tally> cell_tallies;
+  Cell_Tally *d_cell_tallies;
+  std::vector<EmissionGroupData> emission_groups;
+  EmissionGroupData *d_emission_groups;
 };
 
 #endif // gpu_setup_h_

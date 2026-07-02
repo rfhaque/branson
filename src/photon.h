@@ -38,8 +38,12 @@ public:
   //! Constructor
   GPU_HOST_DEVICE Photon(const uint32_t cell_ID, uint32_t group, uint32_t source_type, Constants::event_type descriptor, std::array<double,3> pos,  std::array<double,3> angle, double E0, double life_dx, RNG rng) :
     m_cell_ID(cell_ID), m_group(group), m_source_type(source_type), descriptors{descriptor, 0, 0,0}, m_pos(pos), m_angle(angle), m_E(E0), m_E0(E0), m_life_dx(life_dx), m_rng(rng)
-
   {}
+
+  GPU_HOST_DEVICE Photon(const uint32_t cell_ID, uint32_t group, uint32_t source_type, Constants::event_type descriptor, std::array<double,3> pos,  std::array<double,3> angle, double E, double E0, double life_dx, RNG rng) :
+    m_cell_ID(cell_ID), m_group(group), m_source_type(source_type), descriptors{descriptor, 0, 0,0}, m_pos(pos), m_angle(angle), m_E(E), m_E0(E0), m_life_dx(life_dx), m_rng(rng)
+  {}
+
 
   //! Destructor
   //~Photon() {}
