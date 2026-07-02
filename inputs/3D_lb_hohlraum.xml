@@ -1,3 +1,4 @@
+<!-- ARL: Load balanced hohlraum with thick and think section at 0.1 keV -->
 <prototype>
   <common>
     <method>IMC</method>
@@ -6,14 +7,15 @@
     <dt_start>0.01</dt_start>
     <t_mult>1.0</t_mult>
     <dt_max>1.0</dt_max>
-    <photons>10000000</photons>
+    <photons>250000000</photons>
     <seed>14706</seed>
     <tilt>FALSE</tilt>
     <stratified_sampling>FALSE</stratified_sampling>
     <use_gpu_transporter>TRUE</use_gpu_transporter>
-    <dd_transport_type>REPLICATED</dd_transport_type>
+    <dd_transport_type>PARTICLE_PASSING</dd_transport_type>
     <particle_algorithm>EVENT</particle_algorithm>
-    <particle_storage>SOA</particle_storage>
+    <particle_storage>AOS</particle_storage>
+    <particle_message_size>200000</particle_message_size>
     <n_omp_threads>1</n_omp_threads>
     <output_frequency>1</output_frequency>
     <write_silo>FALSE</write_silo>
@@ -462,8 +464,8 @@
       <opacB>0.0</opacB>
       <opacC>0.0</opacC>
       <opacS>0.0</opacS>
-      <initial_T_e>1.0</initial_T_e>
-      <initial_T_r>1.0</initial_T_r>
+      <initial_T_e>0.1</initial_T_e>
+      <initial_T_r>0.1</initial_T_r>
     </region>
     <!-- vacuum/void -->
     <region>
@@ -474,8 +476,8 @@
       <opacB>0.0</opacB>
       <opacC>0.0</opacC>
       <opacS>0.0</opacS>
-      <initial_T_e>0.001</initial_T_e>
-      <initial_T_r>0.001</initial_T_r>
+      <initial_T_e>0.1</initial_T_e>
+      <initial_T_r>0.1</initial_T_r>
     </region>
     <!-- hohlraum -->
     <region>
@@ -486,8 +488,8 @@
       <opacB>0.0</opacB>
       <opacC>0.0</opacC>
       <opacS>0.0</opacS>
-      <initial_T_e>0.001</initial_T_e>
-      <initial_T_r>0.001</initial_T_r>
+      <initial_T_e>0.1</initial_T_e>
+      <initial_T_r>0.1</initial_T_r>
     </region>
   </regions>
 </prototype>

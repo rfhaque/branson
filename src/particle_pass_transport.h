@@ -30,13 +30,15 @@
 #include "message_counter.h"
 #include "mpi_types.h"
 #include "photon.h"
+#include "photon_data.h"
 #include "sampling_functions.h"
+#include "transport_mode_wrapper.h"
 
 
 template <typename Census_T>
 void particle_pass_transport(
-    const Mesh &mesh, const GPU_Setup<Census_T> &gpu_setup, const IMC_Parameters &imc_parameters, const Info &mpi_info, const MPI_Types &mpi_types,
-    IMC_State &imc_state, Message_Counter &mctr, std::vector<double> &rank_abs_E, std::vector<double> &rank_track_E, Census_T &all_photons) {
+    const Mesh &mesh, GPU_Setup<Census_T> &gpu_setup, const IMC_Parameters &imc_parameters, const Info &mpi_info, const MPI_Types &mpi_types,
+    IMC_State &imc_state, Message_Counter &mctr, std::vector<double> &rank_abs_E, std::vector<double> &rank_track_E, Census_T &all_photons, Census_T &dummy_comm_photons) {
   using std::vector;
 
   // is the GPU even available?
@@ -59,6 +61,10 @@ void particle_pass_transport(
   double exit_E = 0.0;
   double next_dt = imc_state.get_next_dt(); //! Set for census photons
 
+  // copies photons to device, sets up some buffers used in transport
+  Photon_Data photon_data(all_photons);
+  Photon_Data comm_photon_data(dummy_comm_photons);
+
   // timing
   Timer t_transport;
   t_transport.start_timer("timestep_transport");
@@ -80,7 +86,6 @@ void particle_pass_transport(
 
   // This flag indicates that send processing is needed for target rank
   vector<vector<Photon>> send_list;
-  vector<Cell_Tally> cell_tallies(mesh.get_n_local_cells());
 
   // Completion count request made flag
   bool req_made = false;
@@ -122,6 +127,7 @@ void particle_pass_transport(
   // main transport loop
   //------------------------------------------------------------------------//
 
+
   Census_T phtn_recv_list; //!< Photons from received messages
 
   uint64_t n_complete = 0; //!< Completed histories, regardless of origin
@@ -134,13 +140,12 @@ void particle_pass_transport(
   //------------------------------------------------------------------------//
   bool local_work_done = false;
   if(use_gpu) {
-    auto [batch_complete, batch_exit_E, batch_census_E] = batch_transport(next_dt, gpu_available, gpu_setup, imc_parameters, rank_cell_offset, mesh, all_photons, send_list, cell_tallies, t_transport);
+    auto [batch_complete, batch_exit_E, batch_census_E] = batch_transport(next_dt, gpu_available, gpu_setup, imc_parameters, rank_cell_offset, mesh, photon_data, static_cast<size_t>(0), all_photons.size(), send_list, t_transport);
     n_complete += batch_complete;
     exit_E += batch_exit_E;
     census_E += batch_census_E;
     local_work_done = true;
     // condense census right now?
-
   }
 
   // particles that reach census from comm need a place to live
@@ -156,34 +161,17 @@ void particle_pass_transport(
     // on the CPU, allow interleaving of computation and communication with dd_batch_size and
     // the particle message size
     if(!use_gpu) {
+      Photon_Data cpu_photon_data(all_photons);
       size_t batch_start = batch_end;
       batch_end = std::min(batch_start + dd_batch_size, all_photons.size());
       if (batch_start != batch_end) {
         if (batch_end == all_photons.size()) {
           local_work_done = true;
         }
-        if constexpr (std::is_same_v<Census_T, std::vector<Photon>>) {
-          // Create a sub-vector for the batch (requires copy)
-          std::vector<Photon> batch_photons(all_photons.begin() + batch_start,
-                                            all_photons.begin() + batch_end);
-          auto [batch_complete, batch_exit_E, batch_census_E] = batch_transport(next_dt, gpu_available, gpu_setup, imc_parameters, rank_cell_offset, mesh, batch_photons, send_list, cell_tallies, t_transport);
-          // copy batch back into all_photons
-          std::copy(batch_photons.begin(), batch_photons.end(), all_photons.begin() + batch_start);
-          n_complete += batch_complete;
-          exit_E += batch_exit_E;
-          census_E += batch_census_E;
-        } else if constexpr (std::is_same_v<Census_T, PhotonArray>) {
-          // Get a sub-batch (creates a copy)
-          auto batch_photons = all_photons.get_sub_batch(batch_start, batch_end);
-          auto [batch_complete, batch_exit_E, batch_census_E] = batch_transport(next_dt, gpu_available, gpu_setup, imc_parameters, rank_cell_offset, mesh, batch_photons, send_list, cell_tallies, t_transport);
-          all_photons.update_from_sub_batch(batch_photons, batch_start);
-          n_complete += batch_complete;
-          exit_E += batch_exit_E;
-          census_E += batch_census_E;
-        } else {
-          std::cout << "Unsupported particle container for CPU DD transport." << std::endl;
-          exit(EXIT_FAILURE);
-        }
+        auto [batch_complete, batch_exit_E, batch_census_E] = batch_transport(next_dt, gpu_available, gpu_setup, imc_parameters, rank_cell_offset, mesh, cpu_photon_data, batch_start, batch_end, send_list, t_transport);
+        n_complete += batch_complete;
+        exit_E += batch_exit_E;
+        census_E += batch_census_E;
       }
     }
 
@@ -249,7 +237,10 @@ void particle_pass_transport(
     } // end loop over adjacent processors
 
     if(!phtn_recv_list.empty()) {
-      auto [batch_complete, batch_exit_E, batch_census_E] = batch_transport(next_dt, gpu_available, gpu_setup, imc_parameters, rank_cell_offset, mesh, phtn_recv_list, send_list, cell_tallies, t_transport);
+      //std::cout<<"running recv list with: "<<phtn_recv_list.size()<<std::endl;
+      //Photon_Data recv_photon_data(phtn_recv_list);
+      comm_photon_data.reset_without_allocating(phtn_recv_list);
+      auto [batch_complete, batch_exit_E, batch_census_E] = batch_transport(next_dt, gpu_available, gpu_setup, imc_parameters, rank_cell_offset, mesh, comm_photon_data, static_cast<size_t>(0), phtn_recv_list.size(), send_list, t_transport);
       n_complete += batch_complete;
       exit_E += batch_exit_E;
       census_E += batch_census_E;
@@ -281,6 +272,8 @@ void particle_pass_transport(
     }
 
   } // end while
+
+  gpu_setup.sync_cell_tallies();
 
   // record time of transport work for this rank
   t_transport.stop_timer("timestep_transport");
@@ -319,6 +312,8 @@ void particle_pass_transport(
   delete[] phtn_send_request;
 
   // copy cell tallies back out to rank_abs_E and rank_track_E
+  gpu_setup.sync_cell_tallies();
+  const vector<Cell_Tally> &cell_tallies = gpu_setup.get_cell_tallies();
   for (size_t i = 0; i<cell_tallies.size();++i) {
     rank_abs_E[i] = cell_tallies[i].get_abs_E();
     rank_track_E[i] = cell_tallies[i].get_track_E();

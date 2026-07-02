@@ -83,8 +83,16 @@ void imc_particle_pass_driver(Mesh &mesh, IMC_State &imc_state,
 
     // add barrier here to make sure the transport timer starts at roughly the same time
     MPI_Barrier(MPI_COMM_WORLD);
-    particle_pass_transport(mesh, gpu_setup, imc_parameters, mpi_info, mpi_types, imc_state, mctr, abs_E, track_E, all_photons);
 
+    if constexpr (std::is_same_v<Census_T, std::vector<Photon>>) {
+      std::vector<Photon> dummy_comm_photons(10*imc_parameters.get_particle_message_size());
+      particle_pass_transport(mesh, gpu_setup, imc_parameters, mpi_info, mpi_types, imc_state, mctr, abs_E, track_E, all_photons, dummy_comm_photons);
+    }
+    else {
+      PhotonArray dummy_comm_photons;
+      dummy_comm_photons.resize(10*imc_parameters.get_particle_message_size());
+      particle_pass_transport(mesh, gpu_setup, imc_parameters, mpi_info, mpi_types, imc_state, mctr, abs_E, track_E, all_photons, dummy_comm_photons);
+    }
     mesh.update_temperature(abs_E, track_E, imc_state);
 
     // update time for next step
