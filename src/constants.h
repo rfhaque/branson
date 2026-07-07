@@ -35,16 +35,6 @@ constexpr double lower_frequency_bound = 0.01; // keV
 constexpr double upper_frequency_bound = 100.0; // keV
 constexpr double delta_frequency_bounds=upper_frequency_bound - lower_frequency_bound; // keV
 
-
-// parameters used in intensive scattering
-constexpr double m_1 = 495.0;       // keV
-constexpr double one_over_m_1 = 1.0 / m_1; // 1/keV
-constexpr double intensive_scatter_fraction = 0.1; // this fraction of scatters will add more work
-constexpr double lower_frequency_bound = 0.01; // keV
-constexpr double upper_frequency_bound = 100.0; // keV
-constexpr double delta_frequency_bounds=upper_frequency_bound - lower_frequency_bound; // keV
-
-
 enum bc_type { REFLECT, VACUUM, ELEMENT, SOURCE, PROCESSOR }; //!< Boundary conditions
 enum dir_type { X_NEG, X_POS, Y_NEG, Y_POS, Z_NEG, Z_POS }; //!< Directions
 enum event_type : unsigned char { EXIT, PASS, CENSUS, SCATTER, KILLED, BOUND, BORN_SOURCE };         //!< Events
