@@ -13,6 +13,7 @@
 #define source_h_
 
 #include <iostream>
+#include <limits>
 #include <unordered_map>
 #include <vector>
 
@@ -24,10 +25,37 @@
 #include "photon.h"
 #include "sampling_functions.h"
 
+inline uint64_t get_source_photon_count(const uint64_t n_user_photons,
+                                        const double cell_E,
+                                        const double total_E) {
+  Insist(total_E > 0.0, "Cannot compute photon count with non-positive total photon energy");
+
+  const long double count =
+      static_cast<long double>(n_user_photons) * static_cast<long double>(cell_E) /
+      static_cast<long double>(total_E);
+
+  if (count < 1.0L) return 1UL;
+
+  Insist(count <= static_cast<long double>(std::numeric_limits<uint64_t>::max()),
+         "Computed photon count exceeds uint64_t");
+  return static_cast<uint64_t>(count);
+}
+
+inline unsigned int get_source_kernel_blocks(const uint64_t n_photons,
+                                             const int n_threads) {
+  const uint64_t n_blocks =
+      (n_photons + static_cast<uint64_t>(n_threads) - 1UL) /
+      static_cast<uint64_t>(n_threads);
+  Insist(n_blocks <= static_cast<uint64_t>(std::numeric_limits<unsigned int>::max()),
+         "Source photon kernel launch requires too many blocks");
+  return static_cast<unsigned int>(n_blocks);
+}
+
 GPU_KERNEL void make_source_photons( Cell  const * const cells,  const double dt, const uint32_t seed, uint64_t const * const photon_stream_numbers, double const * const photon_E, int const * const photon_type,  int const * const photon_source_face,  uint32_t const * const photon_cell_index, const uint64_t n_photons, Photon * const all_photons) {
   using Constants::c;
 #ifdef USE_GPU
-  int32_t i = threadIdx.x + blockIdx.x * blockDim.x;
+  uint64_t i = static_cast<uint64_t>(threadIdx.x) +
+               static_cast<uint64_t>(blockIdx.x) * static_cast<uint64_t>(blockDim.x);
   if (i < n_photons) {
 #else
   for (size_t i=0;i<n_photons;++i) {
@@ -54,7 +82,8 @@ GPU_KERNEL void make_source_photons( Cell  const * const cells,  const double dt
 GPU_KERNEL void set_source_photons( Cell  const * const cells,  const double dt, const uint32_t seed, uint64_t const * const photon_stream_numbers, int const * const photon_type, int const * const photon_source_face,  const uint64_t n_photons, uint32_t *photon_cell_index, RNG *rng, std::array< double,3 > *pos, std::array<double,3> *angle, double *life_dx, uint32_t *group) {
   using Constants::c;
 #ifdef USE_GPU
-  int32_t i = threadIdx.x + blockIdx.x * blockDim.x;
+  uint64_t i = static_cast<uint64_t>(threadIdx.x) +
+               static_cast<uint64_t>(blockIdx.x) * static_cast<uint64_t>(blockDim.x);
   if (i < n_photons) {
 #else
   for (size_t i=0;i<n_photons;++i) {
@@ -98,28 +127,20 @@ void make_photons(const double dt, const Mesh &mesh, const int rank, const uint3
     int i = mesh.get_local_index(cell.get_global_index());
     // initial census
     if (make_initial_census_flag && E_cell_census[i] > 0.0) {
-      uint32_t t_num_census = int(n_user_photons * E_cell_census[i] / total_E);
-      // make at least one photon to represent census energy
-      if (t_num_census == 0)
-        t_num_census = 1;
+      uint64_t t_num_census =
+          get_source_photon_count(n_user_photons, E_cell_census[i], total_E);
       n_photons+=t_num_census;
     }
     // emission
     if (E_cell_emission[i] > 0.0) {
-      uint32_t t_num_emission =
-          int(n_user_photons * E_cell_emission[i] / total_E);
-      // make at least one photon to represent emission energy
-      if (t_num_emission == 0)
-        t_num_emission = 1;
+      uint64_t t_num_emission =
+          get_source_photon_count(n_user_photons, E_cell_emission[i], total_E);
       n_photons+=t_num_emission;
     }
     if (E_cell_source[i] > 0.0) {
       // boundary source
-        uint32_t t_num_source =
-            int(n_user_photons * E_cell_source[i] / total_E);
-        // make at least one photon to represent source energy
-        if (t_num_source == 0)
-          t_num_source = 1;
+      uint64_t t_num_source =
+          get_source_photon_count(n_user_photons, E_cell_source[i], total_E);
       n_photons+=t_num_source;
     }
   }
@@ -138,11 +159,10 @@ void make_photons(const double dt, const Mesh &mesh, const int rank, const uint3
     uint32_t i = mesh.get_local_index(cell.get_global_index());
     // initial census
     if (make_initial_census_flag && E_cell_census[i] > 0.0) {
-      uint32_t t_num_census = int(n_user_photons * E_cell_census[i] / total_E);
-      // make at least one photon to represent census energy
-      if (t_num_census == 0) t_num_census = 1;
+      uint64_t t_num_census =
+          get_source_photon_count(n_user_photons, E_cell_census[i], total_E);
       const double photon_census_E = E_cell_census[i] / t_num_census;
-      for (uint32_t p=0; p<t_num_census;++p) {
+      for (uint64_t p=0; p<t_num_census;++p) {
         photon_stream_nums[ith_photon] = census_rank_stream_num_offset+ith_photon;
         photon_type[ith_photon] = 0; // census type
         photon_E[ith_photon] = photon_census_E;
@@ -152,12 +172,10 @@ void make_photons(const double dt, const Mesh &mesh, const int rank, const uint3
     }
     // emission
     if (E_cell_emission[i] > 0.0) {
-      uint32_t t_num_emission =
-          int(n_user_photons * E_cell_emission[i] / total_E);
-      // make at least one photon to represent emission energy
-      if (t_num_emission == 0) t_num_emission = 1;
+      uint64_t t_num_emission =
+          get_source_photon_count(n_user_photons, E_cell_emission[i], total_E);
       const double photon_emission_E = E_cell_emission[i] / t_num_emission;
-      for (uint32_t p=0; p<t_num_emission;++p) {
+      for (uint64_t p=0; p<t_num_emission;++p) {
         photon_stream_nums[ith_photon] = cycle_stream_num_offset + rank_stream_num_offset+ith_photon;
         photon_type[ith_photon] = 2;
         photon_E[ith_photon] = photon_emission_E;
@@ -167,13 +185,11 @@ void make_photons(const double dt, const Mesh &mesh, const int rank, const uint3
     }
     if (E_cell_source[i] > 0.0) {
       // boundary source
-      uint32_t t_num_source =
-          int(n_user_photons * E_cell_source[i] / total_E);
-      // make at least one photon to represent source energy
-      if (t_num_source == 1) t_num_source = 1;
+      uint64_t t_num_source =
+          get_source_photon_count(n_user_photons, E_cell_source[i], total_E);
       const double photon_source_E = E_cell_source[i] / t_num_source;
       const int face = cell.get_source_face();
-      for (uint32_t p=0; p<t_num_source;++p) {
+      for (uint64_t p=0; p<t_num_source;++p) {
         photon_stream_nums[ith_photon] = cycle_stream_num_offset + rank_stream_num_offset+ith_photon;
         photon_type[ith_photon] = 1;
         photon_source_face[ith_photon] = face;
@@ -243,7 +259,7 @@ void make_photons(const double dt, const Mesh &mesh, const int rank, const uint3
     #ifdef USE_GPU
     // Kernel settings
     int n_threads = Constants::n_threads_per_block;
-    int n_blocks = (n_photons + n_threads - 1) / n_threads;
+    unsigned int n_blocks = get_source_kernel_blocks(n_photons, n_threads);
     make_source_photons<<<n_blocks, n_threads>>>(gpu_setup.get_device_cells_ptr(), dt, seed, device_photon_stream_nums_ptr, device_photon_E_ptr, device_source_type_ptr, device_photon_source_face_ptr, device_cell_index_ptr, n_photons, device_photon_ptr);
 
     auto kernel_err = cudaGetLastError();
@@ -304,7 +320,7 @@ void make_photons(const double dt, const Mesh &mesh, const int rank, const uint3
     #ifdef USE_GPU
     // Kernel settings
     int n_threads = Constants::n_threads_per_block;
-    int n_blocks = (n_photons + n_threads - 1) / n_threads;
+    unsigned int n_blocks = get_source_kernel_blocks(n_photons, n_threads);
     set_source_photons<<<n_blocks, n_threads>>>(gpu_setup.get_device_cells_ptr(), dt, seed,
       device_photon_stream_nums_ptr, device_source_type_ptr, device_photon_source_face_ptr,
       n_photons, device_cell_index_ptr, device_rng_ptr, device_pos_ptr, device_angle_ptr,
