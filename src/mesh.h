@@ -298,16 +298,13 @@ public:
       tot_source_E = 0.0;
       total_photon_E = 0.0;
       for (uint32_t i = 0; i < n_cell; ++i) {
-        if(step ==1 && m_census_E[i] > 0.0 &&
-           n_user_photons * (m_census_E[i] / global_source_E) < 1.0 ) {
+        if(step ==1 && m_census_E[i] > 0.0 && int(n_user_photons*(m_census_E[i] / global_source_E)) == 0 ) {
             m_census_E[i] = (i % n_ranks == rank)  ? m_census_E[i]/replicated_factor : 0.0;
         }
-        if(m_emission_E[i] > 0.0 &&
-           n_user_photons * (m_emission_E[i] / global_source_E) < 1.0 ) {
+        if(m_emission_E[i] > 0.0 && int(n_user_photons*(m_emission_E[i] / global_source_E)) == 0 ) {
             m_emission_E[i] = (i % n_ranks == rank) ? m_emission_E[i]/replicated_factor : 0.0;
         }
-        if(m_source_E[i] > 0.0 &&
-           n_user_photons * (m_source_E[i] / global_source_E) < 1.0 ) {
+        if(m_source_E[i] > 0.0 && int(n_user_photons*(m_source_E[i] / global_source_E)) == 0 ) {
             m_source_E[i] = (i % n_ranks == rank) ? m_source_E[i]/replicated_factor : 0.0;
         }
         tot_emission_E += m_emission_E[i];
