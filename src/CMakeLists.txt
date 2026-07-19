@@ -334,6 +334,11 @@ list(APPEND branson_deps pugixml)
 
 if(OpenMP_FOUND)
   set(branson_deps "OpenMP::OpenMP_CXX;${branson_deps}")
+elseif(USE_OPENMP AND CMAKE_CXX_COMPILER_WRAPPER STREQUAL "CrayPrgEnv")
+  target_compile_options(BRANSON PRIVATE -fopenmp)
+  target_link_options(BRANSON PRIVATE -fopenmp)
+elseif(USE_OPENMP)
+  message(FATAL_ERROR "USE_OPENMP=ON but CMake could not find OpenMP")
 endif()
 
 if(METIS_FOUND)
