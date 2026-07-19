@@ -443,13 +443,14 @@ The Draco build system doesn't know how to configure the build for
 
   if(OpenMP_FOUND)
     # [2022-10-27 KT] cmake/3.22 doesn't report OpenMP_C_VERSION for nvc++. Fake it for now.
-    if("${OpenMP_C_VERSION}x" STREQUAL "x" AND CMAKE_CXX_COMPILER_ID MATCHES "NVHPC")
+    if("${OpenMP_C_VERSION}x" STREQUAL "x" AND
+      (CMAKE_CXX_COMPILER_ID MATCHES "NVHPC|Cray" OR CMAKE_CXX_COMPILER_WRAPPER MATCHES "CrayPrgEnv"))
       set(OpenMP_C_VERSION
           "5.0"
           CACHE BOOL "OpenMP version." FORCE)
       set(OpenMP_FOUND TRUE)
     endif()
-    message(STATUS "Looking for OpenMP... ${OpenMP_C_FLAGS} (supporting the ${OpenMP_C_VERSION} "
+    message(STATUS "Looking for OpenMP... ${OpenMP_CXX_FLAGS} (supporting the ${OpenMP_C_VERSION} "
                    "standard)")
     if(OpenMP_C_VERSION VERSION_LESS 3.0)
       message(STATUS "OpenMP standard support is too old (< 3.0). Disabling OpenMP build features.")

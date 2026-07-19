@@ -664,7 +664,7 @@ void history_cpu_transport_photons(const uint32_t rank_cell_offset,
         photon_data.h_E_ptr[i],
         photon_data.h_E0_ptr[i],
         photon_data.h_life_dx_ptr[i],
-        photon_data.h_RNG_ptr[i]
+        photon_data.h_RNG_ptr[i],
         cpu_cells_ptr, thread_tally_ptr);
     }
   } // end parallel region
