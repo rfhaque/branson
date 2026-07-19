@@ -436,7 +436,7 @@ The Draco build system doesn't know how to configure the build for
 
   # Find package if desired:
   if(USE_OPENMP)
-    find_package(OpenMP QUIET)
+    find_package(OpenMP QUIET COMPONENTS CXX)
   else()
     set(OpenMP_FOUND FALSE)
   endif()
