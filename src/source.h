@@ -134,9 +134,12 @@ void make_photons(const double dt, const Mesh &mesh, const int rank, const uint3
   std::vector<int> photon_source_face(n_photons);
   std::vector<uint32_t> photon_cell_index(n_photons);
 
-  // in serial loop through and set the seed for each photon
+  // in serial, loop through and set the seed for each photon
   // use this to increment the seed for each photon
   uint64_t ith_photon{0UL};
+  // iterate census and source seeds independently to match old initial census source calls
+  uint64_t ith_census_photon{0UL};
+  uint64_t ith_source_photon{0UL};
 
   for (auto const &cell : mesh) {
     uint32_t i = mesh.get_local_index(cell.get_global_index());
@@ -147,10 +150,11 @@ void make_photons(const double dt, const Mesh &mesh, const int rank, const uint3
       if (t_num_census == 0) t_num_census = 1;
       const double photon_census_E = E_cell_census[i] / t_num_census;
       for (uint32_t p=0; p<t_num_census;++p) {
-        photon_stream_nums[ith_photon] = census_rank_stream_num_offset+ith_photon;
+        photon_stream_nums[ith_photon] = census_rank_stream_num_offset+ith_census_photon;
         photon_type[ith_photon] = source_particle_type::CENSUS_SOURCE;
         photon_E[ith_photon] = photon_census_E;
         photon_cell_index[ith_photon] = i;
+        ith_census_photon++; // only used for RNG state
         ith_photon++;
       }
     }
@@ -162,10 +166,11 @@ void make_photons(const double dt, const Mesh &mesh, const int rank, const uint3
       if (t_num_emission == 0) t_num_emission = 1;
       const double photon_emission_E = E_cell_emission[i] / t_num_emission;
       for (uint32_t p=0; p<t_num_emission;++p) {
-        photon_stream_nums[ith_photon] = cycle_stream_num_offset + rank_stream_num_offset+ith_photon;
+        photon_stream_nums[ith_photon] = cycle_stream_num_offset + rank_stream_num_offset+ith_source_photon;
         photon_type[ith_photon] = source_particle_type::EMISSION_SOURCE;
         photon_E[ith_photon] = photon_emission_E;
         photon_cell_index[ith_photon] = i;
+        ith_source_photon++;
         ith_photon++;
       }
     }
@@ -178,11 +183,12 @@ void make_photons(const double dt, const Mesh &mesh, const int rank, const uint3
       const double photon_source_E = E_cell_source[i] / t_num_source;
       const int face = cell.get_source_face();
       for (uint32_t p=0; p<t_num_source;++p) {
-        photon_stream_nums[ith_photon] = cycle_stream_num_offset + rank_stream_num_offset+ith_photon;
+        photon_stream_nums[ith_photon] = cycle_stream_num_offset + rank_stream_num_offset+ith_source_photon;
         photon_type[ith_photon] = source_particle_type::BOUNDARY_SOURCE;
         photon_source_face[ith_photon] = face;
         photon_E[ith_photon] = photon_source_E;
         photon_cell_index[ith_photon] = i;
+        ith_source_photon++;
         ith_photon++;
       }
     }

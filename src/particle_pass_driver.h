@@ -61,7 +61,8 @@ void imc_particle_pass_driver(Mesh &mesh, IMC_State &imc_state,
     MPI_Allreduce(MPI_IN_PLACE, &global_source_energy, 1, MPI_DOUBLE, MPI_SUM,
                   MPI_COMM_WORLD);
 
-    // make gpu setup object, may want to source on GPU later so make it before sourcing here
+    // gpu setup object holds data structures used in cycle, mesh needs to be resynced and
+    // tallies need to be reset every cycle
     GPU_Setup<Census_T> gpu_setup(rank, n_ranks, imc_parameters.get_use_gpu_transporter_flag(), mesh.get_cells(), n_user_photons);
 
     // setup source

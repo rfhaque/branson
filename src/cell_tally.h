@@ -45,8 +45,12 @@ public:
 
   GPU_HOST_DEVICE
   double get_abs_E() const {return abs_E;}
-
   double get_track_E() const {return track_E;}
+  void zero() {
+    abs_E = 0.0;
+    track_E = 0.0;
+  }
+
 
   double abs_E;  //!< Absorbed energy in jerks
   double track_E;  //!< Track energy used for estimate of radiation temperature
