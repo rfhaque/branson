@@ -23,7 +23,7 @@ class GPU_Setup {
 public:
   //! Constructor
   GPU_Setup(const int rank, const int n_ranks, const bool use_gpu_transporter, const std::vector<Cell> &cpu_cells, uint64_t n_user_photons)
-    : cells(cpu_cells), host_cells_ptr(cpu_cells.data()), m_use_gpu_transporter(use_gpu_transporter), device_cells_ptr(nullptr), n_cells(cpu_cells.size())
+    : host_cells_ptr(cpu_cells.data()), m_use_gpu_transporter(use_gpu_transporter), device_cells_ptr(nullptr), n_cells(cpu_cells.size())
   {
       // Precompute emission group data for event-based transport (both CPU and GPU)
       emission_groups.resize(n_cells);
@@ -80,6 +80,56 @@ public:
       census_photons.E0.reserve(photon_reserve);
       census_photons.life_dx.reserve(photon_reserve);
       census_photons.rng.reserve(photon_reserve);
+    }
+  }
+
+  // re-sync data
+  void update_cells_and_reset_tallies(const int rank, const std::vector<Cell> &cpu_cells, uint64_t n_user_photons) {
+      host_cells_ptr = cpu_cells.data();
+      // Precompute emission group data for event-based transport (both CPU and GPU) and reset
+      // tallies
+      for (size_t i = 0; i < n_cells; ++i) {
+        emission_groups[i] = precompute_emission_group_data(cpu_cells[i]);
+        cell_tallies[i].zero();
+      }
+
+
+#ifdef USE_GPU
+    if(m_use_gpu_transporter) {
+      if (rank ==0) {
+        std::cout<<"Transferring "<<cpu_cells.size()<<" cell(s) to the GPU"<<std::endl;
+      }
+      // copy cells
+      auto copy_err = cudaMemcpy(device_cells_ptr, cpu_cells.data(), sizeof(Cell) * cpu_cells.size(),
+                       cudaMemcpyHostToDevice);
+      Insist(!copy_err, "CUDA/HIP error in copying cells data");
+
+      // copy cell tallies (zero initialize on device)
+      copy_err = cudaMemcpy(d_cell_tallies, cell_tallies.data(), cell_tallies.size()* sizeof(Cell_Tally), cudaMemcpyHostToDevice);
+      Insist(!copy_err, "CUDA/HIP error copying cell tallies");
+
+      // copy emission Groups
+      copy_err = cudaMemcpy(d_emission_groups, emission_groups.data(), sizeof(EmissionGroupData) * n_cells, cudaMemcpyHostToDevice);
+      Insist(!copy_err, "CUDA/HIP error copying emission groups");
+    }
+#else
+    d_emission_groups = emission_groups.data();
+    d_cell_tallies = cell_tallies.data();
+#endif
+
+    if constexpr (std::is_same_v<Census_T, std::vector<Photon>>) {
+      census_photons.reserve(n_user_photons);
+    } else {
+      census_photons.cell_ID.reserve(n_user_photons);
+      census_photons.group.reserve(n_user_photons);
+      census_photons.source_type.reserve(n_user_photons);
+      census_photons.descriptors.reserve(n_user_photons);
+      census_photons.pos.reserve(n_user_photons);
+      census_photons.angle.reserve(n_user_photons);
+      census_photons.E.reserve(n_user_photons);
+      census_photons.E0.reserve(n_user_photons);
+      census_photons.life_dx.reserve(n_user_photons);
+      census_photons.rng.reserve(n_user_photons);
     }
   }
 
@@ -146,10 +196,9 @@ void set_device_ID(const int rank, const int n_ranks) {
 #endif
 }
 
-  const std::vector<Cell> &cells;
-  Cell const * const host_cells_ptr;
+  Cell const * host_cells_ptr;
   bool m_use_gpu_transporter;
-  Cell *device_cells_ptr;
+  Cell * device_cells_ptr;
   size_t n_cells;
   Census_T census_photons;
   std::vector<Cell_Tally> cell_tallies;

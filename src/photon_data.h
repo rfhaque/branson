@@ -286,14 +286,14 @@ public:
   }
 
   void reset_event_based_data() {
-    #ifdef USE_GPU
+#ifdef USE_GPU
     auto err = cudaMemcpy(d_active_indices, h_initial_indices.data(), sizeof(int32_t) * n_photons, cudaMemcpyHostToDevice);
     Insist(!err, "GPU AoS Memcpy H2D: d_active_indices");
     err = cudaMemcpy(d_absorbed_E, h_zeros.data(), sizeof(double) * n_photons, cudaMemcpyHostToDevice);
     Insist(!err, "GPU AoS Memcpy H2D: d_abs_E");
     err = cudaMemcpy(d_track_length_E, h_zeros.data(), sizeof(double) * n_photons, cudaMemcpyHostToDevice);
     Insist(!err, "GPU AoS Memcpy H2D: d_track_length_E");
-    #endif
+#endif
   }
 
   //--------------------------------------------------------------------------//

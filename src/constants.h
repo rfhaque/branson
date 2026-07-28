@@ -37,7 +37,8 @@ constexpr double delta_frequency_bounds=upper_frequency_bound - lower_frequency_
 
 enum bc_type { REFLECT, VACUUM, ELEMENT, SOURCE, PROCESSOR }; //!< Boundary conditions
 enum dir_type { X_NEG, X_POS, Y_NEG, Y_POS, Z_NEG, Z_POS }; //!< Directions
-enum event_type : unsigned char { EXIT, PASS, CENSUS, SCATTER, KILLED, BOUND, BORN_SOURCE };         //!< Events
+enum event_type : unsigned char { EXIT, PASS, CENSUS, SCATTER, KILLED, BOUND, BORN_SOURCE }; //!< Events
+enum source_particle_type {CENSUS_SOURCE, BOUNDARY_SOURCE, EMISSION_SOURCE};
 enum {
   PARTICLE_PASS,
   REPLICATED
