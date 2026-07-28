@@ -61,7 +61,7 @@ void imc_replicated_driver(Mesh &mesh, IMC_State &imc_state,
     mesh.calculate_photon_energy(imc_state, n_user_photons);
 
     // reset gpu setup with new mesh cells, reset tallies, and update emission group data
-    gpu_setup.update_cells_and_reset_tallies(rank, mesh.get_cells(), n_user_photons);
+    gpu_setup.update_cells_and_reset_tallies(rank, n_ranks, mesh.get_cells(), n_user_photons);
 
     // all reduce to get total source energy to make correct number of articles on each rank
     double global_source_energy = mesh.get_total_photon_E();

@@ -386,6 +386,21 @@ public:
       }
       // domain decomposed mode
       else {
+        // gather data using original global cell index
+        std::vector<double> global_T_e(n_global, 0.0);
+        std::vector<double> global_T_r(n_global, 0.0);
+        std::vector<double> global_abs_E(n_global, 0.0);
+
+        for (uint32_t i = 0; i < n_cell; ++i) {
+          const Cell &e = cells[i];
+          auto original_global_cell_index = e.get_silo_index();
+          global_T_e[original_global_cell_index] = e.get_T_e();
+          global_T_r[original_global_cell_index] = T_r[i];
+          global_abs_E[original_global_cell_index] = abs_E[i];
+        }
+        MPI_Allreduce(MPI_IN_PLACE, global_T_e.data(), global_T_e.size(), MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+        MPI_Allreduce(MPI_IN_PLACE, global_T_r.data(), global_T_r.size(), MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+        MPI_Allreduce(MPI_IN_PLACE, global_abs_E.data(), global_abs_E.size(), MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
         if (rank == 0) {
           std::cout.precision(8);
           std::cout<<"-------- VERBOSE PRINT BLOCK: CELL TEMPERATURE --------"<<std::endl;
@@ -394,24 +409,17 @@ public:
           std::cout<<setiosflags(ios::right) << setw(12) << "T_r"<<" ";
           std::cout<<setiosflags(ios::right) << setw(12) << "abs_E"<<" ";
           std::cout<<std::endl;
-        }
-        // ranks take turns writing out cell data for ordered cell output in domain decomposed mode
-        for (int write_rank =0; write_rank < n_ranks; ++write_rank) {
-          if(rank == write_rank) {
-            for (uint32_t i = 0; i < n_cell; ++i) {
-              const Cell &e = cells[i];
-              std::cout<<setiosflags(ios::right) << setw(12) << e.get_global_index()<<" ";
-              std::cout<<setiosflags(ios::right) << setw(12) << e.get_T_e()<<" ";
-              std::cout<<setiosflags(ios::right) << setw(12) << T_r[i]<<" ";
-              std::cout<<setiosflags(ios::right) << setw(12) << abs_E[i]<<" ";
-              std::cout<<std::endl;
-            }
+          for (uint32_t i = 0; i < n_global;++i) {
+            std::cout<<setiosflags(ios::right) << setw(12) << i<<" ";
+            std::cout<<setiosflags(ios::right) << setw(12) << global_T_e[i]<<" ";
+            std::cout<<setiosflags(ios::right) << setw(12) << global_T_r[i]<<" ";
+            std::cout<<setiosflags(ios::right) << setw(12) << global_abs_E[i];
+            std::cout<<std::endl;
+            std::cout<<std::flush;
           }
-          MPI_Barrier(MPI_COMM_WORLD);
-          std::cout<<std::flush;
+          std::cout<<"-------------------------------------------------------"<<std::endl;
         }
-      if (rank == 0)
-        std::cout<<"-------------------------------------------------------"<<std::endl;
+      MPI_Barrier(MPI_COMM_WORLD);
       }
     } // end verbose print block
 
