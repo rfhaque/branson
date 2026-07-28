@@ -84,7 +84,7 @@ public:
   }
 
   // re-sync data
-  void update_cells_and_reset_tallies(const int rank, const std::vector<Cell> &cpu_cells, uint64_t n_user_photons) {
+  void update_cells_and_reset_tallies(const int rank, const int n_ranks, const std::vector<Cell> &cpu_cells, uint64_t n_user_photons) {
       host_cells_ptr = cpu_cells.data();
       // Precompute emission group data for event-based transport (both CPU and GPU) and reset
       // tallies
