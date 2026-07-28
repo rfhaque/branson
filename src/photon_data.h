@@ -339,4 +339,3 @@ public:
 };
 
 #endif // photon_data_h_
-

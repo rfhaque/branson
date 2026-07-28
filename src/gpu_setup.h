@@ -65,19 +65,21 @@ public:
     d_cell_tallies = cell_tallies.data();
 #endif
 
+    const size_t photon_reserve =
+        (n_ranks > 0) ? static_cast<size_t>(n_user_photons / static_cast<uint64_t>(n_ranks)) : 0;
     if constexpr (std::is_same_v<Census_T, std::vector<Photon>>) {
-      census_photons.reserve(n_user_photons);
+      census_photons.reserve(photon_reserve);
     } else {
-      census_photons.cell_ID.reserve(n_user_photons);
-      census_photons.group.reserve(n_user_photons);
-      census_photons.source_type.reserve(n_user_photons);
-      census_photons.descriptors.reserve(n_user_photons);
-      census_photons.pos.reserve(n_user_photons);
-      census_photons.angle.reserve(n_user_photons);
-      census_photons.E.reserve(n_user_photons);
-      census_photons.E0.reserve(n_user_photons);
-      census_photons.life_dx.reserve(n_user_photons);
-      census_photons.rng.reserve(n_user_photons);
+      census_photons.cell_ID.reserve(photon_reserve);
+      census_photons.group.reserve(photon_reserve);
+      census_photons.source_type.reserve(photon_reserve);
+      census_photons.descriptors.reserve(photon_reserve);
+      census_photons.pos.reserve(photon_reserve);
+      census_photons.angle.reserve(photon_reserve);
+      census_photons.E.reserve(photon_reserve);
+      census_photons.E0.reserve(photon_reserve);
+      census_photons.life_dx.reserve(photon_reserve);
+      census_photons.rng.reserve(photon_reserve);
     }
   }
 
@@ -209,4 +211,3 @@ void set_device_ID(const int rank, const int n_ranks) {
 //----------------------------------------------------------------------------//
 // end of gpu_setup.h
 //----------------------------------------------------------------------------//
-

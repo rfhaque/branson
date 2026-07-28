@@ -624,7 +624,7 @@ void history_cpu_transport_photons(const uint32_t rank_cell_offset,
   // reduce tallies if using openmp
   for(size_t cell=0; cell<n_cells; ++cell) {
     for(int thread =0; thread<n_omp_threads;++thread)
-      cell_tallies[cell].merge_in_tally(thread_tallies[thread][cell]);
+      cpu_tallies_ptr[cell].merge_in_tally(thread_tallies[thread][cell]);
   }
 #else
   // normal serial version
@@ -658,13 +658,13 @@ void history_cpu_transport_photons(const uint32_t rank_cell_offset,
       transport_photon_history_soa_cpu(rank_cell_offset,
         photon_data.h_cell_ID_ptr[i],
         photon_data.h_group_ptr[i],
-        phtoon_data.h_descriptors_ptr[i],
+        photon_data.h_descriptors_ptr[i],
         photon_data.h_pos_ptr[i],
         photon_data.h_angle_ptr[i],
         photon_data.h_E_ptr[i],
         photon_data.h_E0_ptr[i],
         photon_data.h_life_dx_ptr[i],
-        photon_data.h_RNG_ptr[i]
+        photon_data.h_RNG_ptr[i],
         cpu_cells_ptr, thread_tally_ptr);
     }
   } // end parallel region
@@ -672,7 +672,7 @@ void history_cpu_transport_photons(const uint32_t rank_cell_offset,
   // reduce tallies if using openmp
   for(size_t cell=0; cell<n_cells; ++cell) {
     for(int thread =0; thread<n_omp_threads;++thread)
-      cell_tallies[cell].merge_in_tally(thread_tallies[thread][cell]);
+      cpu_tallies_ptr[cell].merge_in_tally(thread_tallies[thread][cell]);
   }
 #else
   // normal serial version
