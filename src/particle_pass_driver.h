@@ -46,6 +46,10 @@ void imc_particle_pass_driver(Mesh &mesh, IMC_State &imc_state,
 
   const uint32_t seed = imc_parameters.get_rng_seed();
 
+  // gpu setup object holds data structures used in cycle, mesh needs to be resynced and
+  // tallies need to be reset every cycle
+  GPU_Setup<Census_T> gpu_setup(rank, n_ranks, imc_parameters.get_use_gpu_transporter_flag(), mesh.get_cells(), n_user_photons);
+
   while (!imc_state.finished()) {
     if (rank == 0)
       imc_state.print_timestep_header();
@@ -55,15 +59,14 @@ void imc_particle_pass_driver(Mesh &mesh, IMC_State &imc_state,
     //set opacity, Fleck factor, all energy to source
     mesh.calculate_photon_energy(imc_state, n_user_photons);
 
+    // reset gpu setup with new mesh cells, reset tallies, and update emission group data
+    gpu_setup.update_cells_and_reset_tallies(rank, mesh.get_cells(), n_user_photons);
+
     // all reduce to get total source energy to make correct number of
     // particles on each rank
     double global_source_energy = mesh.get_total_photon_E();
     MPI_Allreduce(MPI_IN_PLACE, &global_source_energy, 1, MPI_DOUBLE, MPI_SUM,
                   MPI_COMM_WORLD);
-
-    // gpu setup object holds data structures used in cycle, mesh needs to be resynced and
-    // tallies need to be reset every cycle
-    GPU_Setup<Census_T> gpu_setup(rank, n_ranks, imc_parameters.get_use_gpu_transporter_flag(), mesh.get_cells(), n_user_photons);
 
     // setup source
     Timer t_source;
