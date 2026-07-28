@@ -378,7 +378,7 @@ void cpu_event_transport_photons(const uint32_t rank_cell_offset,
 
     // 1. Precompute physics data for active photons
     //    active_photons_indices.data() points to the original indices
-    precompute_data(rank_cell_offset, photon_data.h_cell_ID_ptr, photon_data.h_group_ptr, cells_ptr,
+    precompute_data(rank_cell_offset, photon_data.h_group_ptr, photon_data.h_cell_ID_ptr, cells_ptr,
       active_photons_indices.data(), active_count,
       sigma_s, sigma_a, f, total_sigma_s, local_cell_indices);
 

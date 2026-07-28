@@ -16,6 +16,7 @@
 #include <iostream>
 #include <vector>
 #include <array>
+#include <inttypes.h>
 
 #include "constants.h"
 #include "config.h"
@@ -106,6 +107,14 @@ public:
          << endl;
     cout << "Energy: " << m_E << " , Initial energy: " << m_E0 << endl;
     cout << "Cell ID: " << m_cell_ID << endl;
+  }
+
+  //! Print particle information
+  GPU_HOST_DEVICE inline void print_info() const {
+    //printf("----Photon Info----\n");
+    printf("pos: %f %f %f  angle: %f %f %f  ", m_pos[0], m_pos[1], m_pos[2], m_angle[0], m_angle[1], m_angle[2]);
+    printf("Energy: %e  Initial energy: %e  ", m_E, m_E0);
+    printf("Cell ID: %" PRIu32 "\n", m_cell_ID);
   }
 
   //! Override great than operator to sort
