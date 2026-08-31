@@ -889,7 +889,7 @@ __global__ void calculate_events_kernel_soa(
     uint32_t active_idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (active_idx >= active_count) return;
 
-    uint32_t photon_idx = active_indices[active_idx];
+    int32_t photon_idx = active_indices[active_idx];
     uint32_t local_cell_index = cell_ID[photon_idx] - rank_cell_offset;
     // Add bounds check if necessary, assume valid for now
     const Cell* cell = &cells[local_cell_index];
@@ -932,7 +932,7 @@ __global__ void calculate_events_kernel_soa(
       distance = -1.0; // used to exclude from all event queues below
     }
 
-    // put real photon index in the event array if photon had event (and wasn't killed
+    // put real photon index in the event array if photon had event (and wasn't killed)
     scatter_indices[active_idx] = (distance == dist_to_scatter) ?  photon_idx : -1;
     boundary_indices[active_idx] = (distance == dist_to_boundary) ? photon_idx : -1;
     census_indices[active_idx] = (distance == dist_to_census) ? photon_idx : -1;
@@ -1086,7 +1086,7 @@ __global__ void calculate_events_kernel_aos(
     uint32_t active_idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (active_idx >= active_count) return;
 
-    uint32_t photon_idx = active_indices[active_idx];
+    int32_t photon_idx = active_indices[active_idx];
     Photon& phtn = all_photons[photon_idx];
     RNG& rng = phtn.get_rng();
 
