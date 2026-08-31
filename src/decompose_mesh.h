@@ -20,6 +20,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
+#include <cmath>
 
 #include "config.h"
 #include "buffer.h"
@@ -104,6 +105,7 @@ std::vector<int> metis_partition(Proto_Mesh &mesh, int &edgecut, const int rank,
   // root rank gathers all cells and uses METIS to setup partitions
   else {
     std::vector<Proto_Cell> all_cells(n_global_cells);
+    std::vector<int> cell_weights;
     const std::vector<Proto_Cell> send_cells =
         mesh.get_pre_window_allocation_cells();
     std::copy(send_cells.begin(), send_cells.end(), all_cells.begin());
@@ -126,6 +128,11 @@ std::vector<int> metis_partition(Proto_Mesh &mesh, int &edgecut, const int rank,
       uint32_t yp_neighbor = icell.get_next_cell(Y_POS);
       uint32_t zm_neighbor = icell.get_next_cell(Z_NEG);
       uint32_t zp_neighbor = icell.get_next_cell(Z_POS);
+
+      // calculate weight of this cell in attempt to better distribute cells with more emission
+      // particles
+      auto region = mesh.get_region(icell.get_region_ID());
+      cell_weights.push_back(std::max(1, static_cast<int>(std::pow(log(region.get_absorption_opacity(region.get_T_e())),2))));
 
       xadj.push_back(
           adjncy_ctr); // starting index in xadj for this cell's nodes
@@ -172,10 +179,10 @@ std::vector<int> metis_partition(Proto_Mesh &mesh, int &edgecut, const int rank,
 
     int metis_return = METIS_PartGraphKway(
         &signed_n_global_cells, // number of on-rank vertices
-        &ncon,                  // weight of vertices
+        &ncon,                  // number of balancing contraints
         &xadj[0],               // how cells are stored locally
         &adjncy[0],             // how cells are stored loccaly
-        NULL,                   // weight of vertices
+        NULL, //&cell_weights[0],       // vertex weights = region absorption opacity
         NULL,                   // size of vertices for comm volume
         NULL,                   // weight of the edges
         &n_parts,               // number of ranks (partitions)

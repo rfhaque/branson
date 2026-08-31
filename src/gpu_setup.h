@@ -152,7 +152,7 @@ public:
   }
 
   Census_T & get_census_photons() {return census_photons;}
-  Cell const * const get_host_cells_ptr() const {return host_cells_ptr;}
+  Cell const * get_host_cells_ptr() const {return host_cells_ptr;}
   Cell *get_device_cells_ptr() const {return device_cells_ptr;}
   bool use_gpu_transporter() const {return m_use_gpu_transporter;}
   EmissionGroupData * get_emission_groups_ptr() const {return d_emission_groups;}
