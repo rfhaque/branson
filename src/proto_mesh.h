@@ -438,6 +438,11 @@ public:
 
   const std::vector<Proto_Cell> &get_cell_list(void) const { return cell_list; }
 
+  Region get_region(uint32_t region_ID) {
+    auto found_region= std::find_if(regions.begin(), regions.end(), [region_ID] (Region region) -> bool {return region.get_ID() == region_ID;});
+    return *found_region;
+  }
+
   //--------------------------------------------------------------------------//
   // member variables
   //--------------------------------------------------------------------------//

@@ -277,9 +277,15 @@ if("${GPU_DBS_STRING}" STREQUAL "CUDA" )
     message("Making GPU(CUDA) BRANSON with ${CUDA_ARCH} architecture ")
   else()
     message("Setting CUDA compiler options")
-    #set_target_properties(BRANSON PROPERTIES CUDA_ARCHITECTURES "90") # H100
-    set_target_properties(BRANSON PROPERTIES CUDA_ARCHITECTURES "70") # V100
-    #set_target_properties(BRANSON PROPERTIES CUDA_ARCHITECTURES "80") # A100
+    # Set CUDA compute capabilities to use host architecture (read: must configure on GPU node!)
+    if(NOT DEFINED CUDA_ARCHITECTURES)
+      # This value is automatically added to all CUDA targets. See cmake/component_macros.cmake
+      set(CUDA_ARCHITECTURES
+          "native"
+          CACHE STRING "target architecture for gpu code.")
+    endif()
+    message("CUDA_ARCHITECTURES = ${CUDA_ARCHITECTURES}")
+
     set_target_properties(BRANSON PROPERTIES CUDA_STANDARD 17)
     string(APPEND CMAKE_CUDA_FLAGS " -g --expt-relaxed-constexpr --fmad=false -lineinfo")
     string(APPEND CMAKE_CUDA_FLAGS " --expt-extended-lambda"  )
